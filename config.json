@@ -1,0 +1,12 @@
+{
+  "language": "es",
+  "port": 8080,
+  "update_minutes": 5,
+  "radius_km": 250,
+  "max_stations": 25,
+  "max_cloud_layers": 3,
+  "default_lat": 40.472,
+  "default_lon": -3.561,
+  "metar_type_keyword": false,
+  "simconnect_dll": "auto"
+}

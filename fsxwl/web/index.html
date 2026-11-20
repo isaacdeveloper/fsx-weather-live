@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>FSX Weather Live</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, Segoe UI, sans-serif; display: flex; height: 100vh; color: #1b1f24; }
+  #side { width: 380px; max-width: 45vw; overflow-y: auto; padding: 12px; background: #f6f7f9; border-right: 1px solid #d8dce2; }
+  #map { flex: 1; }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  .card { background: #fff; border: 1px solid #d8dce2; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row input[type=text] { flex: 1; padding: 6px 8px; border: 1px solid #b9c0ca; border-radius: 6px; }
+  button { padding: 6px 10px; border: 1px solid #3b6fd4; background: #3b6fd4; color: #fff; border-radius: 6px; cursor: pointer; }
+  button.sec { background: #fff; color: #3b6fd4; }
+  button.off { background: #fff; color: #b3261e; border-color: #b3261e; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: #b3261e; }
+  .dot.ok { background: #1a7f37; }
+  .st { border-top: 1px solid #eceff3; padding: 6px 0; cursor: pointer; }
+  .st:first-child { border-top: 0; }
+  .st b { font-size: 13px; }
+  .muted { color: #667085; font-size: 12px; }
+  .raw { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; word-break: break-all; color: #475467; }
+  .warn { color: #b3261e; }
+  pre { margin: 0; max-height: 140px; overflow: auto; font-size: 11px; background: #101418; color: #d6dde6; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+  .plane { font-size: 24px; line-height: 24px; text-align: center; color: #b3261e; text-shadow: 0 0 3px #fff; }
+</style>
+</head>
+<body>
+<div id="side">
+  <div class="row"><h1 style="flex:1">FSX Weather Live</h1><button class="sec" id="langbtn" title="Language / Idioma">EN</button></div>
+
+  <div class="card">
+    <div><span id="simdot" class="dot"></span><span id="simtxt"></span></div>
+    <div class="muted" id="simpos"></div>
+    <div class="muted warn" id="simerr"></div>
+    <label class="row" style="margin-top:6px"><input type="checkbox" id="follow" checked> <span data-i18n="follow"></span></label>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <b id="injtxt"></b>
+      <span style="flex:1"></span>
+      <button id="injbtn"></button>
+    </div>
+    <div class="row" style="margin-top:6px"><button class="sec" id="diagbtn" data-i18n="diag"></button>
+      <span class="muted" id="diagmsg"></span></div>
+    <div class="muted" id="injnote"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input type="text" id="q" data-i18n-ph="ph">
+      <button id="go" data-i18n="search"></button>
+    </div>
+    <div class="muted" id="searchmsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><b data-i18n="near"></b><span style="flex:1"></span>
+      <button class="sec" id="refresh" data-i18n="refresh"></button></div>
+    <div class="muted" id="upd"></div>
+    <div class="muted warn" id="fetcherr"></div>
+    <div id="list"></div>
+  </div>
+
+  <div class="card"><b data-i18n="logt"></b><pre id="log"></pre></div>
+  <div class="muted" data-i18n="credits"></div>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map = L.map('map').setView([40.47, -3.56], 7);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap'}).addTo(map);
+const stationLayer = L.layerGroup().addTo(map);
+const searchLayer = L.layerGroup().addTo(map);
+let planeMarker = null, centered = false, injectOn = false, lastUpdated = null;
+
+
+const $ = id => document.getElementById(id);
+const I18N = {
+  es: {follow: 'Seguir al avión en el mapa', diag: 'Diagnóstico de formato', search: 'Buscar', near: 'Estaciones cercanas',
+       refresh: 'Actualizar', logt: 'Registro', ph: 'Dirección o ICAO (p. ej. LEMD)',
+       credits: 'Datos: NOAA Aviation Weather Center. Mapa: OpenStreetMap.',
+       simOn: 'FSX conectado', simOff: 'FSX: sin conexión (el mapa funciona igualmente)',
+       pos: (p) => `Lat ${p.lat.toFixed(3)}  Lon ${p.lon.toFixed(3)}  Alt ${Math.round(p.alt_ft)} ft  Rumbo ${Math.round(p.hdg)}°  GS ${Math.round(p.gs_kt)} kt`,
+       injOn: 'Inyección en FSX: ACTIVADA', injOff: 'Inyección en FSX: desactivada', enable: 'Activar', disable: 'Desactivar',
+       injHint: 'Empieza desactivada. Actívala con el vuelo ya cargado.',
+       last: (t, m) => `Última descarga: ${t} (cada ${m} min)`, loading: 'Descargando…',
+       confirm: 'Se va a cambiar el tiempo de FSX con datos reales.\nConviene tener el vuelo ya cargado. ¿Continuar?',
+       searching: 'Buscando…', noStations: ' (sin estaciones cerca)'},
+  en: {follow: 'Follow the aircraft on the map', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
+       refresh: 'Refresh', logt: 'Log', ph: 'Address or ICAO (e.g. KJFK)',
+       credits: 'Data: NOAA Aviation Weather Center. Map: OpenStreetMap.',
+       simOn: 'FSX connected', simOff: 'FSX: not connected (the map still works)',
+       pos: (p) => `Lat ${p.lat.toFixed(3)}  Lon ${p.lon.toFixed(3)}  Alt ${Math.round(p.alt_ft)} ft  Hdg ${Math.round(p.hdg)}°  GS ${Math.round(p.gs_kt)} kt`,
+       injOn: 'FSX injection: ENABLED', injOff: 'FSX injection: disabled', enable: 'Enable', disable: 'Disable',
+       injHint: 'Starts disabled. Enable it once your flight is loaded.',
+       last: (t, m) => `Last download: ${t} (every ${m} min)`, loading: 'Downloading…',
+       confirm: "This will change FSX's weather using real data.\nIt is best to have your flight already loaded. Continue?",
+       searching: 'Searching…', noStations: ' (no stations nearby)'}
+};
+let lang = 'es';
+const T = k => I18N[lang][k];
+function applyLang(l) {
+  if (l !== lang) { lang = l; lastUpdated = undefined; }
+  document.documentElement.lang = lang;
+  $('langbtn').textContent = lang === 'es' ? 'EN' : 'ES';
+  document.querySelectorAll('[data-i18n]').forEach(e => e.textContent = T(e.dataset.i18n));
+  document.querySelectorAll('[data-i18n-ph]').forEach(e => e.placeholder = T(e.dataset.i18nPh));
+}
+applyLang('es');
+const POST = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-FSXWL': '1'}, body: JSON.stringify(body || {})});
+
+function stationItem(s, extra) {
+  const div = document.createElement('div');
+  div.className = 'st';
+  const b = document.createElement('b'); b.textContent = s.icao + (s.dist_km != null ? '  · ' + Math.round(s.dist_km) + ' km' : '');
+  const sum = document.createElement('div'); sum.textContent = s.summary || '';
+  const raw = document.createElement('div'); raw.className = 'raw'; raw.textContent = s.raw;
+  div.append(b, sum, raw);
+  div.onclick = () => map.setView([s.lat, s.lon], Math.max(map.getZoom(), 9));
+  return div;
+}
+function stationMarker(s, color) {
+  const m = L.circleMarker([s.lat, s.lon], {radius: 7, color: color, fillColor: color, fillOpacity: .6});
+  const box = document.createElement('div');
+  const t = document.createElement('b'); t.textContent = s.icao;
+  const a = document.createElement('div'); a.textContent = s.summary || '';
+  const r = document.createElement('div'); r.className = 'raw'; r.textContent = s.raw;
+  box.append(t, a, r);
+  m.bindPopup(box);
+  return m;
+}
+
+async function tick() {
+  let st;
+  try { st = await (await fetch('/api/state')).json(); } catch (e) { return; }
+  if (st.lang && st.lang !== lang) applyLang(st.lang);
+  const sim = st.sim;
+  $('simdot').className = 'dot' + (sim.connected ? ' ok' : '');
+  $('simtxt').textContent = sim.connected ? T('simOn') : T('simOff');
+  $('simerr').textContent = sim.connected ? '' : (sim.error || '');
+  if (sim.pos) {
+    $('simpos').textContent = T('pos')(sim.pos);
+    // SVG silhouette with the nose pointing north, so the heading applies directly (the ✈ glyph points ~45° depending on the font).
+    const svg = '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M12 1.5 L14 9 L22.5 13.5 L22.5 15.5 L14 13.2 L13.6 19 L16.3 21 L16.3 22.6 L12 21.6 L7.7 22.6 L7.7 21 L10.4 19 L10 13.2 L1.5 15.5 L1.5 13.5 L10 9 Z" fill="#b3261e" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>';
+    const icon = L.divIcon({className: '', html: `<div style="width:30px;height:30px;transform:rotate(${sim.pos.hdg}deg)">${svg}</div>`, iconSize: [30, 30], iconAnchor: [15, 15]});
+    if (!planeMarker) planeMarker = L.marker([sim.pos.lat, sim.pos.lon], {icon}).addTo(map);
+    else { planeMarker.setLatLng([sim.pos.lat, sim.pos.lon]); planeMarker.setIcon(icon); }
+    if ($('follow').checked) map.setView([sim.pos.lat, sim.pos.lon], map.getZoom());
+    centered = true;
+  } else { $('simpos').textContent = ''; }
+
+  injectOn = st.inject.enabled;
+  $('injtxt').textContent = injectOn ? T('injOn') : T('injOff');
+  $('injbtn').textContent = injectOn ? T('disable') : T('enable');
+  $('injbtn').className = injectOn ? 'off' : '';
+  $('injnote').textContent = st.inject.note || (injectOn ? '' : T('injHint'));
+
+  $('upd').textContent = st.updated ? T('last')(new Date(st.updated * 1000).toLocaleTimeString(), st.update_minutes) : T('loading');
+  $('fetcherr').textContent = st.fetch_error || '';
+  if (st.updated !== lastUpdated) {
+    lastUpdated = st.updated;
+    const list = $('list'); list.replaceChildren();
+    stationLayer.clearLayers();
+    st.stations.forEach(s => { list.append(stationItem(s)); stationLayer.addLayer(stationMarker(s, '#3b6fd4')); });
+  }
+  if (!centered && st.stations.length) { map.setView([st.center.lat, st.center.lon], 7); centered = true; }
+  $('log').textContent = st.log.join('\n');
+}
+
+$('injbtn').onclick = async () => {
+  if (!injectOn && !confirm(T('confirm'))) return;
+  await POST('/api/inject', {enabled: !injectOn}); tick();
+};
+$('diagbtn').onclick = async () => {
+  const r = await (await POST('/api/diag')).json(); $('diagmsg').textContent = r.msg || ''; setTimeout(tick, 6000);
+};
+$('langbtn').onclick = async () => {
+  await POST('/api/lang', {lang: lang === 'es' ? 'en' : 'es'}); await tick();
+};
+$('refresh').onclick = async () => { await POST('/api/refresh'); setTimeout(tick, 1500); };
+$('go').onclick = async () => {
+  const q = $('q').value; $('searchmsg').textContent = T('searching');
+  const r = await (await fetch('/api/search?q=' + encodeURIComponent(q))).json();
+  searchLayer.clearLayers();
+  if (r.error) { $('searchmsg').textContent = r.error; return; }
+  $('searchmsg').textContent = r.name + (r.stations.length ? '' : T('noStations'));
+  const pin = L.marker([r.lat, r.lon]).addTo(searchLayer);
+  r.stations.forEach(s => searchLayer.addLayer(stationMarker(s, '#c2410c')));
+  $('follow').checked = false;
+  map.setView([r.lat, r.lon], 9);
+  const box = document.createElement('div');
+  box.append(document.createTextNode(r.name));
+  r.stations.forEach(s => { box.append(document.createElement('hr')); box.append(stationItem(s)); });
+  pin.bindPopup(box, {maxWidth: 360, maxHeight: 280}).openPopup();
+};
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+
+tick(); setInterval(tick, 3000);
+</script>
+</body>
+</html>
