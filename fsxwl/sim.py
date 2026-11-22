@@ -1,7 +1,7 @@
-"""Conexión con FSX mediante SimConnect.dll (ctypes, __stdcall, 32 bits).
+"""Connection to FSX through SimConnect.dll (ctypes, __stdcall, 32-bit).
 
-Todas las llamadas a SimConnect se hacen en un único hilo (el hilo de trabajo);
-el resto de la aplicación solo encola órdenes con `post()`.
+All SimConnect calls are made on a single thread (the worker thread);
+the rest of the app only queues commands with `post()`.
 """
 import ctypes
 import os
@@ -48,7 +48,7 @@ class Sim:
         self.log = log
         self.connected = False
         self.pos = None            # dict lat, lon, alt_ft, hdg, gs_kt, t
-        self.readback = {}         # icao -> METAR que devuelve FSX
+        self.readback = {}         # icao -> METAR returned by FSX
         self.last_error = ""
         self._h = None
         self._dll = None
@@ -57,11 +57,11 @@ class Sim:
         self._created = set()
         self._custom_on = False
         self._diag_running = False
-        self._exc = []             # excepciones recibidas (para el diagnóstico)
+        self._exc = []             # exceptions received (for the diagnostic)
         self._req = REQ_WX_BASE
         self._thread = threading.Thread(target=self._run, name="simconnect", daemon=True)
 
-    # ---------- API pública (cualquier hilo) ----------
+    # ---------- public API (any thread) ----------
     def start(self):
         if sys.platform != "win32":
             self.last_error = t("sim_win")
@@ -82,7 +82,7 @@ class Sim:
     def post(self, fn, *args):
         self._q.put((fn, args))
 
-    # ---------- llamadas SimConnect (solo hilo de trabajo) ----------
+    # ---------- SimConnect calls (worker thread only) ----------
     def _bind(self):
         d = ctypes.WinDLL(self.dll_path)
         H, C = ctypes.c_void_p, ctypes.c_char_p
@@ -175,7 +175,7 @@ class Sim:
     def _run(self):
         try:
             self._bind()
-        except Exception as e:  # DLL no cargable
+        except Exception as e:  # DLL cannot be loaded
             self.last_error = t("sim_loadfail", err=e)
             self.log(self.last_error)
             return
@@ -202,7 +202,7 @@ class Sim:
             time.sleep(0.1)
         self._disconnect()
 
-    # ---------- órdenes de tiempo (se ejecutan en el hilo de trabajo) ----------
+    # ---------- weather commands (run on the worker thread) ----------
     def _next_req(self):
         self._req += 1
         return self._req
@@ -214,7 +214,7 @@ class Sim:
 
     def cmd_restore_global(self):
         if not self._custom_on and not self._created:
-            return  # nunca se tocó el tiempo de FSX en esta conexión: no hay nada que restaurar
+            return  # FSX weather was never touched on this connection: nothing to restore
         for icao in list(self._created):
             self._Remove(self._h, self._next_req(), icao.encode("ascii"))
         self._created.clear()
@@ -223,12 +223,12 @@ class Sim:
         self.log(t("sim_restore", hr=hr & 0xFFFFFFFF))
 
     def cmd_apply(self, stations, seconds):
-        """stations: lista de dicts con icao, name, lat, lon, elev_m, sim_metar."""
+        """stations: list of dicts with icao, name, lat, lon, elev_m, sim_metar."""
         from collections import Counter
         if not self._custom_on:
             self.cmd_enable_custom()
         self._exc.clear()
-        self._diag_running = True      # silencia el registro individual de excepciones
+        self._diag_running = True      # silences per-exception logging
         ok = 0
         try:
             for s in stations:
@@ -252,7 +252,7 @@ class Sim:
             else t("sim_noexc")
         self.log(t("sim_sent", ok=ok, n=len(stations), extra=extra))
 
-    # ---------- diagnóstico ----------
+    # ---------- diagnostic ----------
     def _pump(self, seconds):
         end = time.time() + seconds
         while time.time() < end:

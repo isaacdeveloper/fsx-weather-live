@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-22
+
+### Changed
+- Launcher renamed from `iniciar.bat` to `launch.bat`, with English-only messages.
+- English is now the default language (`"language": "en"`); Spanish is still available from the UI toggle or `config.json`.
+- README updated with the new map features; code comments and docstrings translated to English.
+
+### Removed
+- Spanish documentation (`README.es.md`, `LEEME.txt`); the project docs are English-only.
+
 ## [0.2.0] - 2026-11-22
 
 ### Added

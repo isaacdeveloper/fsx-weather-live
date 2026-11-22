@@ -54,7 +54,7 @@ class TestApp(unittest.TestCase):
         self.assertEqual(len(st["stations"]), 2)
         s = st["stations"][0]
         self.assertTrue(s["sim_metar"].startswith("LEMD "))
-        self.assertNotIn("METAR", s["sim_metar"])  # FSX la rechaza (WEATHER_INVALID_METAR)
+        self.assertNotIn("METAR", s["sim_metar"])  # FSX rejects it (WEATHER_INVALID_METAR)
         self.assertIn("Viento 270° a 12 kt", s["summary"])
         self.assertFalse(st["inject"]["enabled"])
 
@@ -94,7 +94,7 @@ class TestApp(unittest.TestCase):
         self.app.sim.pos = {"lat": 40.0, "lon": -3.0, "alt_ft": 0, "hdg": 0, "gs_kt": 0, "t": _t.time()}
         try:
             r = json.loads(self.post("/api/diag", {}, {"X-FSXWL": "1"}).read())
-            self.assertIn("lanzado", r["msg"])
+            self.assertIn("started", r["msg"])
             self.assertEqual(self.posted[0][0], "cmd_diag")
             self.assertEqual(self.posted[0][1][3], "LEMD")
         finally:
@@ -109,12 +109,12 @@ class TestApp(unittest.TestCase):
 
     def test_search_empty_and_failure(self):
         self.assertIn("error", json.loads(self.get("/api/search?q=")))
-        net.geocode = lambda q: (_ for _ in ()).throw(RuntimeError("sin red"))
+        net.geocode = lambda q: (_ for _ in ()).throw(RuntimeError("no network"))
         self.assertIn("error", json.loads(self.get("/api/search?q=calle%20falsa")))
 
     def test_fetch_failure_keeps_previous_data(self):
         def boom(*a):
-            raise OSError("sin red")
+            raise OSError("no network")
         old = net.metars_near
         net.metars_near = boom
         try:

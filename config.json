@@ -1,5 +1,5 @@
 {
-  "language": "es",
+  "language": "en",
   "port": 8080,
   "update_minutes": 5,
   "radius_km": 250,

@@ -55,7 +55,7 @@ class TestMetar(unittest.TestCase):
         self.assertEqual(d["wx"], ["+TSRA"])
         self.assertIn("+TSRA", s)
         self.assertIn("BKN055CB", s)
-        self.assertIn(" 11KM ", s)  # 7 SM = 11,3 km
+        self.assertIn(" 11KM ", s)  # 7 SM = 11.3 km
 
     def test_negative_temps_and_fraction_visibility(self):
         d, s = conv("CYYZ 201000Z 31010KT 1 1/2SM -SN BKN008 OVC015 M05/M07 A2985")
@@ -64,13 +64,13 @@ class TestMetar(unittest.TestCase):
         self.assertEqual(d["vis_m"], int(1.5 * 1609.344))
         self.assertIn("-05/-07", s)
         self.assertIn("-SN", s)
-        self.assertIn("2SM", s)  # 1,5 SM se redondea
+        self.assertIn("2SM", s)  # 1.5 SM is rounded
 
     def test_low_visibility_fraction(self):
         _, s = conv("EGLL 201000Z 00000KT 0400 FG VV002 08/08 Q1030")
         self.assertIn(" FG ", s)
         self.assertIn("OVC002", s)
-        self.assertIn(" 1/4SM ", s)  # 400 m = 0,249 SM -> 2/8 = 1/4
+        self.assertIn(" 1/4SM ", s)  # 400 m = 0.249 SM -> 2/8 = 1/4
 
     def test_cavok(self):
         d, s = conv("LFPG 201000Z VRB02KT CAVOK 12/08 Q1018")

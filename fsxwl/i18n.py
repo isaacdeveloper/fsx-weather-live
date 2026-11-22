@@ -1,11 +1,11 @@
-"""Textos del backend en español (es) e inglés (en).
+"""Backend strings in Spanish (es) and English (en).
 
-El idioma es global (una sola persona usa la app): se fija con `set_lang()` al
-arrancar (config.json -> "language") y desde el selector de la interfaz.
+The language is global (a single person uses the app): it is set with `set_lang()`
+at startup (config.json -> "language") and from the UI toggle.
 """
 
 SUPPORTED = ("es", "en")
-_lang = "es"
+_lang = "en"
 
 STR = {
     # --- app ---
@@ -49,7 +49,7 @@ STR = {
     "sim_exc_list": {"es": " | excepciones: {lst}", "en": " | exceptions: {lst}"},
     "sim_noexc": {"es": " | sin excepciones", "en": " | no exceptions"},
     "sim_readback": {"es": "FSX devuelve (petición {req}): {txt}", "en": "FSX returns (request {req}): {txt}"},
-    # --- diagnóstico ---
+    # --- diagnostic ---
     "dg_start": {"es": "DIAG ===== inicio =====", "en": "DIAG ===== start ====="},
     "dg_nonear": {"es": "DIAG FSX no devolvió ninguna estación cercana (¿no tiene estaciones aquí?)",
                   "en": "DIAG FSX returned no nearby station (does it have stations here?)"},

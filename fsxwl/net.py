@@ -1,10 +1,10 @@
-"""Descargas: METAR de NOAA (sin clave) y geocodificación con Nominatim."""
+"""Downloads: NOAA METAR (no API key) and geocoding with Nominatim."""
 import json
 import math
 import urllib.parse
 import urllib.request
 
-UA = "FSXWeatherLive/0.1 (herramienta personal para simulador de vuelo)"
+UA = "FSXWeatherLive/0.2 (personal flight simulator tool)"
 NOAA = "https://aviationweather.gov/api/data/metar"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 
@@ -26,7 +26,7 @@ def haversine_km(lat1, lon1, lat2, lon2):
 
 
 def _clean(items):
-    """Se queda con lo imprescindible; tolera campos ausentes."""
+    """Keeps only the essentials; tolerates missing fields."""
     out = []
     for it in items if isinstance(items, list) else []:
         if not isinstance(it, dict):
@@ -43,7 +43,7 @@ def _clean(items):
 
 
 def metars_near(lat, lon, radius_km=250, limit=25):
-    """METAR más recientes dentro de un cuadro alrededor de (lat, lon)."""
+    """Latest METARs inside a box around (lat, lon)."""
     dlat = radius_km / 111.0
     dlon = radius_km / (111.0 * max(0.2, math.cos(math.radians(lat))))
     bbox = "%.3f,%.3f,%.3f,%.3f" % (lat - dlat, lon - dlon, lat + dlat, lon + dlon)
@@ -67,7 +67,7 @@ def metars_by_ids(ids):
 
 
 def geocode(query):
-    """Dirección -> (lat, lon, nombre) con OpenStreetMap Nominatim (uso puntual)."""
+    """Address -> (lat, lon, name) with OpenStreetMap Nominatim (occasional use)."""
     url = NOMINATIM + "?" + urllib.parse.urlencode({"q": query, "format": "json", "limit": 1})
     res = _get_json(url)
     if not res:

@@ -17,7 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "web")
 
 DEFAULTS = {
-    "language": "es",   # "es" or "en" (switchable from the web UI)
+    "language": "en",   # "en" or "es" (switchable from the web UI)
     "port": 8080,
     "update_minutes": 5,
     "radius_km": 250,
@@ -45,7 +45,7 @@ class App:
     def __init__(self, base_dir, cfg):
         self.base_dir = base_dir
         self.cfg = cfg
-        set_lang(cfg.get("language", "es"))
+        set_lang(cfg.get("language", "en"))
         self.lock = threading.RLock()
         self.logbuf = deque(maxlen=120)
         self.logfile = os.path.join(base_dir, "fsxwl.log")

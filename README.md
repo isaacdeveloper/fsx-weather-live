@@ -4,8 +4,6 @@ Real-world weather for **Microsoft Flight Simulator X (Steam Edition)**, without
 
 The app downloads free, public **METAR** reports from the NOAA Aviation Weather Center, shows them on a map next to your real aircraft position (read through SimConnect), refreshes every 5 minutes and can inject that weather into FSX.
 
-*Spanish version: [README.es.md](README.es.md)*
-
 > Unofficial project. Not affiliated with or endorsed by Microsoft, Valve, NOAA or OpenStreetMap.
 
 ## Features
@@ -15,7 +13,9 @@ The app downloads free, public **METAR** reports from the NOAA Aviation Weather 
 - Live aircraft position and heading from FSX via SimConnect.
 - Weather refresh every 5 minutes (configurable) and when you fly far from the last download.
 - Optional injection of real weather into FSX (disabled by default; fully reversible).
-- Spanish / English interface and messages (toggle in the UI or `"language"` in `config.json`).
+- Weather symbols on the map for each station (sun/moon, clouds, rain, snow, fog, storm) with temperature and a colour-coded wind arrow.
+- Corner panel with the weather at the station nearest your aircraft: condition, temperature, wind, visibility, dew point and QNH.
+- English / Spanish interface (toggle in the UI or `"language"` in `config.json`).
 - Python standard library only: nothing to install.
 
 ## Requirements
@@ -27,7 +27,7 @@ The app downloads free, public **METAR** reports from the NOAA Aviation Weather 
 ## Install and run
 
 1. Copy the `FSXWeatherLive` folder into your FSX folder, e.g. `E:\SteamLibrary\steamapps\common\FSX\FSXWeatherLive`.
-2. Double-click `iniciar.bat`. The interface opens at <http://localhost:8080>.
+2. Double-click `launch.bat`. The interface opens at <http://localhost:8080>.
 3. Start FSX and load a flight; the panel changes to "FSX connected".
 4. With the flight loaded, press **Enable** under "FSX injection". Press **Disable** to give FSX its own weather back.
 
@@ -37,7 +37,7 @@ Running from another location? Set `simconnect_dll` in `config.json` to the full
 
 | Key | Default | Meaning |
 |---|---|---|
-| `language` | `"es"` | `"es"` or `"en"` |
+| `language` | `"en"` | `"en"` or `"es"` |
 | `port` | `8080` | Local web server port (bound to 127.0.0.1) |
 | `update_minutes` | `5` | Download interval |
 | `radius_km` / `max_stations` | `250` / `25` | Search radius and number of stations |

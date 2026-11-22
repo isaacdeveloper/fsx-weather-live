@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>FSX Weather Live</title>
@@ -200,7 +200,7 @@ const I18N = {
        wxPlane: 'Weather at aircraft', wxHere: 'Local weather', windL: 'Wind', visL: 'Vis.', dewL: 'Dew pt',
        calm: 'Calm', vrb: 'Variable', expand: 'Expand', collapse: 'Collapse'}
 };
-let lang = 'es';
+let lang = 'en';
 const T = k => I18N[lang][k];
 function applyLang(l) {
   if (l !== lang) { lang = l; lastUpdated = undefined; }

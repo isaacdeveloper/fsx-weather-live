@@ -1,12 +1,12 @@
-"""Decodifica un METAR estándar y genera la cadena METAR de SimConnect (FSX).
+"""Decodes a standard METAR and builds the SimConnect (FSX) METAR string.
 
-El formato de SimConnect (SimConnect_WeatherSetObservation) NO es el METAR
-estándar: usa secciones en orden fijo y una sintaxis propia. Aquí solo se
-emite el subconjunto documentado por Microsoft:
+The SimConnect format (SimConnect_WeatherSetObservation) is NOT standard
+METAR: it uses sections in a fixed order and its own syntax. Only the subset
+documented by Microsoft is emitted here:
 
-  ICAO [METAR] DDHHMMZ  DDDSSKT[GXX]  [DDDVDDD]  VIS  [FENÓMENOS]  NUBES  TT/DD  Qhhhh
+  ICAO [METAR] DDHHMMZ  DDDSSKT[GXX]  [DDDVDDD]  VIS  [WEATHER]  CLOUDS  TT/DD  Qhhhh
 
-Si falta un dato, la sección se omite en lugar de inventarla.
+If a value is missing, its section is omitted instead of being made up.
 """
 import re
 from datetime import datetime, timezone
@@ -25,7 +25,7 @@ _QNH = re.compile(r"^Q(\d{4})$")
 _ALT = re.compile(r"^A(\d{4})$")
 _TIME = re.compile(r"^\d{6}Z$")
 
-# Fenómenos admitidos por SimConnect (BC -> no se emite; PL -> PE).
+# Weather phenomena accepted by SimConnect (BC -> not emitted; PL -> PE).
 _WX_DESC = "MI|PR|BC|DR|BL|SH|TS|FZ"
 _WX_PHEN = "DZ|RA|SN|SG|IC|PL|PE|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS"
 _WX = re.compile(r"^(\+|-|VC)?((?:%s))?((?:%s)*)$" % (_WX_DESC, _WX_PHEN))
@@ -40,7 +40,7 @@ def _signed(s):
 
 
 def parse_metar(raw):
-    """Devuelve un dict con los datos decodificados (los que existan)."""
+    """Returns a dict with the decoded fields (those present)."""
     d = {
         "raw": raw, "icao": None, "wind": None, "wind_var": None, "vis_m": None,
         "wx": [], "clouds": [], "temp": None, "dew": None, "qnh_hpa": None,
@@ -154,7 +154,7 @@ def _temp_token(v):
 
 
 def to_simconnect(icao, d, now=None, include_type=True, max_cloud_layers=3):
-    """Construye la cadena METAR en el formato de SimConnect."""
+    """Builds the METAR string in SimConnect format."""
     now = now or datetime.now(timezone.utc)
     parts = [icao]
     if include_type:
@@ -209,7 +209,7 @@ _SUM = {
 
 
 def summary(d, lang="es"):
-    """Resumen legible (es/en) para la interfaz."""
+    """Human-readable summary (es/en) for the UI."""
     L = _SUM.get(lang, _SUM["es"])
     out = []
     w = d.get("wind")
@@ -254,7 +254,7 @@ _COVER_RANK = {"FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4}
 
 
 def condition(d):
-    """Categoría de tiempo para elegir el icono del mapa (el fenómeno manda sobre las nubes)."""
+    """Weather category used to pick the map icon (phenomena take precedence over clouds)."""
     wx = " ".join(t for t in d.get("wx", []) if not t.startswith("VC"))
     if "TS" in wx:
         return "thunder"
@@ -284,7 +284,7 @@ def condition(d):
 
 
 def weather_info(d, lang="es"):
-    """Datos compactos para los iconos y el panel del mapa."""
+    """Compact data for the map icons and panel."""
     c = condition(d)
     return {"cond": c, "text": _COND_TXT.get(lang, _COND_TXT["es"])[c],
             "wind": d.get("wind"), "vis_m": d.get("vis_m"), "temp": d.get("temp"),
