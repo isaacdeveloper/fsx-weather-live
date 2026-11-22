@@ -9,6 +9,7 @@ The app downloads free, public **METAR** reports from the NOAA Aviation Weather 
 ## Features
 
 - Map (Leaflet + OpenStreetMap) with nearby METAR stations and a decoded summary of each one.
+- Weather for the area you are looking at: pan or zoom anywhere in the world and the airports in view appear, each marked with its ICAO code.
 - Search by street address (Nominatim) or ICAO code (e.g. `LEMD`, `KJFK`).
 - Live aircraft position and heading from FSX via SimConnect.
 - Weather refresh every 5 minutes (configurable) and when you fly far from the last download.

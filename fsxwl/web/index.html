@@ -29,6 +29,7 @@
   .wxm { display: flex; align-items: center; gap: 2px; white-space: nowrap; background: rgba(255,255,255,.88);
          border: 1.5px solid var(--c, #3b6fd4); border-radius: 12px; padding: 1px 6px 1px 3px; font-size: 11px; font-weight: 600;
          box-shadow: 0 1px 3px rgba(0,0,0,.25); width: max-content; transform: translate(-50%, -50%); cursor: pointer; }
+  .wxm .id { color: var(--c, #3b6fd4); font-weight: 700; margin-right: 2px; letter-spacing: .02em; }
   .wxm .ic { font-size: 18px; line-height: 20px; }
   .wxm svg { display: block; }
   #wxpanel { background: rgba(255,255,255,.95); border-radius: 10px; padding: 10px 12px; min-width: 200px;
@@ -79,6 +80,7 @@
       <button class="sec" id="refresh" data-i18n="refresh"></button></div>
     <div class="muted" id="upd"></div>
     <div class="muted warn" id="fetcherr"></div>
+    <div class="muted" id="areamsg"></div>
     <div id="list"></div>
   </div>
 
@@ -92,7 +94,9 @@
 const map = L.map('map').setView([40.47, -3.56], 7);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap'}).addTo(map);
 const stationLayer = L.layerGroup().addTo(map);
+const areaLayer = L.layerGroup().addTo(map);
 const searchLayer = L.layerGroup().addTo(map);
+let areaStations = [], areaKey = '', areaAt = 0, areaTimer = null, areaSeq = 0, areaInfo = null;
 let planeMarker = null, centered = false, injectOn = false, lastUpdated = null, lastStations = [], lastPos = null;
 
 // ---------- weather symbols ----------
@@ -186,6 +190,7 @@ const I18N = {
        confirm: 'Se va a cambiar el tiempo de FSX con datos reales.\nConviene tener el vuelo ya cargado. ¿Continuar?',
        searching: 'Buscando…', noStations: ' (sin estaciones cerca)',
        wxPlane: 'Tiempo en el avión', wxHere: 'Tiempo en la zona', windL: 'Viento', visL: 'Vis.', dewL: 'Rocío',
+       inView: (n, t) => `En el mapa: ${n} aeropuertos${t > n ? ' de ' + t : ''} (se actualiza al mover o hacer zoom)`, areaErr: 'No se pudo cargar el tiempo de esta zona',
        calm: 'Calma', vrb: 'Variable', expand: 'Ampliar', collapse: 'Reducir'},
   en: {follow: 'Follow the aircraft on the map', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
        refresh: 'Refresh', logt: 'Log', ph: 'Address or ICAO (e.g. KJFK)',
@@ -198,12 +203,13 @@ const I18N = {
        confirm: "This will change FSX's weather using real data.\nIt is best to have your flight already loaded. Continue?",
        searching: 'Searching…', noStations: ' (no stations nearby)',
        wxPlane: 'Weather at aircraft', wxHere: 'Local weather', windL: 'Wind', visL: 'Vis.', dewL: 'Dew pt',
+       inView: (n, t) => `On the map: ${n} airports${t > n ? ' of ' + t : ''} (updates as you pan or zoom)`, areaErr: 'Could not load weather for this area',
        calm: 'Calm', vrb: 'Variable', expand: 'Expand', collapse: 'Collapse'}
 };
 let lang = 'en';
 const T = k => I18N[lang][k];
 function applyLang(l) {
-  if (l !== lang) { lang = l; lastUpdated = undefined; }
+  if (l !== lang) { lang = l; lastUpdated = undefined; areaAt = 0; }
   document.documentElement.lang = lang;
   $('langbtn').textContent = lang === 'es' ? 'EN' : 'ES';
   document.querySelectorAll('[data-i18n]').forEach(e => e.textContent = T(e.dataset.i18n));
@@ -224,7 +230,7 @@ function stationItem(s, extra) {
 }
 function stationMarker(s, color) {
   const w = s.weather || {};
-  const html = `<div class="wxm" style="--c:${color}"><span class="ic">${wxIcon(s)}</span>` +
+  const html = `<div class="wxm" style="--c:${color}"><span class="id">${s.icao}</span><span class="ic">${wxIcon(s)}</span>` +
     `${w.temp != null ? '<span>' + w.temp + '°</span>' : ''}${windArrow(w.wind, 16, windColor(w.wind))}` +
     `${w.wind && (w.wind.kt || w.wind.gust_kt) ? '<span>' + w.wind.kt + (w.wind.gust_kt ? 'G' + w.wind.gust_kt : '') + '</span>' : ''}</div>`;
   const m = L.marker([s.lat, s.lon], {icon: L.divIcon({className: '', html, iconSize: [0, 0]}), title: s.icao});
@@ -236,6 +242,31 @@ function stationMarker(s, color) {
   m.bindPopup(box);
   return m;
 }
+
+// ---------- weather for the visible map area ----------
+function renderArea() {
+  areaLayer.clearLayers();
+  const near = new Set(lastStations.map(s => s.icao));
+  areaStations.forEach(s => { if (!near.has(s.icao)) areaLayer.addLayer(stationMarker(s, '#475467')); });
+  $('areamsg').textContent = areaInfo ? (areaInfo.error ? T('areaErr') : T('inView')(areaInfo.n, areaInfo.t)) : '';
+}
+async function loadArea(force) {
+  const b = map.getBounds(), sz = map.getSize();
+  const q = {s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(),
+             cols: Math.max(2, Math.round(sz.x / 110)), rows: Math.max(2, Math.round(sz.y / 60))};
+  const key = [q.s, q.w, q.n, q.e].map(v => v.toFixed(2)).join(',') + ',' + q.cols + 'x' + q.rows;
+  if (!force && key === areaKey && Date.now() - areaAt < 60000) return;
+  areaKey = key; areaAt = Date.now();
+  const seq = ++areaSeq;
+  let r;
+  try { r = await (await fetch('/api/area?' + new URLSearchParams(q))).json(); } catch (e) { r = {error: String(e)}; }
+  if (seq !== areaSeq) return;  // a newer request has started
+  if (r.error) { areaInfo = {error: true}; areaAt = 0; renderArea(); return; }
+  areaStations = r.stations || [];
+  areaInfo = {n: areaStations.length, t: r.total || 0};
+  renderArea();
+}
+map.on('moveend', () => { clearTimeout(areaTimer); areaTimer = setTimeout(() => loadArea(false), 400); });
 
 async function tick() {
   let st;
@@ -271,7 +302,9 @@ async function tick() {
     stationLayer.clearLayers();
     st.stations.forEach(s => { list.append(stationItem(s)); stationLayer.addLayer(stationMarker(s, '#3b6fd4')); });
     lastStations = st.stations;
+    renderArea();
   }
+  if (Date.now() - areaAt > st.update_minutes * 60000) loadArea(true);
   renderPanel();
   if (!centered && st.stations.length) { map.setView([st.center.lat, st.center.lon], 7); centered = true; }
   $('log').textContent = st.log.join('\n');

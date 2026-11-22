@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
+### Added
+- The map loads the weather for whatever area is on screen: panning or zooming anywhere in the world fetches the METAR airports in view (refreshed every `update_minutes` too).
+- Every weather marker now shows the airport's ICAO code.
+- Airports are thinned to one per grid cell (international airports preferred) so the map stays readable when zoomed out.
+- `GET /api/area?s=&w=&n=&e=` endpoint, with a 5-minute cache and support for views that cross the date line.
+
+### Fixed
+- A diagnostic test depended on test execution order for its language.
+
 ## [0.2.1] - 2026-11-22
 
 ### Changed

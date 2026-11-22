@@ -1,5 +1,6 @@
 """Application: METAR scheduler, shared state and local web server."""
 import json
+import math
 import os
 import threading
 import time
@@ -57,6 +58,7 @@ class App:
         self.inject = False
         self.inject_note = None
         self.sim = Sim(cfg["simconnect_dll"], self.log)
+        self.area_cache = {}      # rounded bbox -> (time, built stations)
         self._stop = threading.Event()
         self._wake = threading.Event()
 
@@ -214,6 +216,43 @@ class App:
         except Exception as e:
             return {"error": t("s_error", err=e)}
 
+    AREA_TTL = 300
+    AREA_MAX = 150
+
+    def area(self, south, west, north, east, cols=12, rows=8):
+        """Stations (with weather) inside the visible map box, thinned to a grid."""
+        south, north = max(-90.0, min(south, north)), min(90.0, max(south, north))
+        if east - west >= 360:
+            west, east = -180.0, 180.0
+        else:
+            west = (west + 180) % 360 - 180
+            east = (east + 180) % 360 - 180
+            if east == west:
+                west, east = -180.0, 180.0
+        cols, rows = max(1, min(int(cols), 30)), max(1, min(int(rows), 20))
+        # Round outwards to 0.5 deg so small pans reuse the cache.
+        key = (math.floor(south * 2) / 2, math.floor(west * 2) / 2, math.ceil(north * 2) / 2, math.ceil(east * 2) / 2)
+        now = time.time()
+        with self.lock:
+            hit = self.area_cache.get(key)
+        if hit and now - hit[0] < self.AREA_TTL:
+            built = hit[1]
+        else:
+            try:
+                built = self._build(net.metars_in_bbox(*key))
+            except Exception as e:
+                return {"error": t("fetch_fail", err=e), "stations": []}
+            with self.lock:
+                self.area_cache = {k: v for k, v in self.area_cache.items() if now - v[0] < self.AREA_TTL}
+                if len(self.area_cache) > 40:
+                    self.area_cache.clear()
+                self.area_cache[key] = (now, built)
+        inside = [s for s in built
+                  if south <= s["lat"] <= north
+                  and (west <= s["lon"] <= east if west <= east else (s["lon"] >= west or s["lon"] <= east))]
+        shown = net.thin_grid(inside, south, west, north, east, cols, rows)[:self.AREA_MAX]
+        return {"total": len(inside), "stations": self._public(shown)}
+
     def run(self):
         self.log(t("start"))
         self.sim.start()
@@ -255,6 +294,16 @@ def make_handler(app):
             u = urlparse(self.path)
             if u.path == "/api/state":
                 return self._json(app.state())
+            if u.path == "/api/area":
+                qs = parse_qs(u.query)
+                try:
+                    box = [float(qs[k][0]) for k in ("s", "w", "n", "e")]
+                    grid = [int(qs.get(k, [d])[0]) for k, d in (("cols", 12), ("rows", 8))]
+                except (KeyError, ValueError):
+                    return self._json({"error": "bbox"}, 400)
+                if not all(map(math.isfinite, box)):
+                    return self._json({"error": "bbox"}, 400)
+                return self._json(app.area(*box, *grid))
             if u.path == "/api/search":
                 q = parse_qs(u.query).get("q", [""])[0]
                 return self._json(app.search(q))

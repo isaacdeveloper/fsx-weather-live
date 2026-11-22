@@ -4,7 +4,7 @@ import math
 import urllib.parse
 import urllib.request
 
-UA = "FSXWeatherLive/0.2 (personal flight simulator tool)"
+UA = "FSXWeatherLive/0.3 (personal flight simulator tool)"
 NOAA = "https://aviationweather.gov/api/data/metar"
 NOMINATIM = "https://nominatim.openstreetmap.org/search"
 
@@ -59,6 +59,37 @@ def metars_near(lat, lon, radius_km=250, limit=25):
             res.append(s)
     res.sort(key=lambda s: s["dist_km"])
     return res[:limit]
+
+
+def metars_in_bbox(south, west, north, east):
+    """Latest METARs inside a lat/lon box (west > east means it crosses the antimeridian).
+
+    NOAA returns at most ~400 stations and thins them out on very large boxes.
+    """
+    boxes = [(west, east)] if west <= east else [(west, 180.0), (-180.0, east)]
+    seen, res = set(), []
+    for w, e in boxes:
+        bbox = "%.3f,%.3f,%.3f,%.3f" % (south, w, north, e)
+        url = NOAA + "?" + urllib.parse.urlencode({"bbox": bbox, "format": "json"})
+        for s in _clean(_get_json(url)):
+            if s["icao"] not in seen:
+                seen.add(s["icao"])
+                res.append(s)
+    return res
+
+
+def thin_grid(stations, south, west, north, east, cols, rows):
+    """Keeps at most one station per grid cell so the map stays readable."""
+    width = (east - west) % 360 or 360.0
+    height = max(north - south, 1e-6)
+    # Stable choice per cell, preferring international airports.
+    ranked = sorted(stations, key=lambda s: ("intl" not in s["name"].lower(), s["icao"]))
+    cells = {}
+    for s in ranked:
+        cx = int(((s["lon"] - west) % 360) / width * cols)
+        cy = int((s["lat"] - south) / height * rows)
+        cells.setdefault((min(cx, cols - 1), min(max(cy, 0), rows - 1)), s)
+    return list(cells.values())
 
 
 def metars_by_ids(ids):

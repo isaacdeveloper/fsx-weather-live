@@ -89,6 +89,7 @@ class TestApp(unittest.TestCase):
 
     def test_diag_launches_with_sim(self):
         import time as _t
+        set_lang("en")
         self.posted.clear()
         self.app.sim.connected = True
         self.app.sim.pos = {"lat": 40.0, "lon": -3.0, "alt_ft": 0, "hdg": 0, "gs_kt": 0, "t": _t.time()}
@@ -106,6 +107,36 @@ class TestApp(unittest.TestCase):
         r = json.loads(self.get("/api/search?q=LETO"))
         self.assertEqual(r["name"], "LETO")
         self.assertEqual(len(r["stations"]), 1)
+
+    def test_area_returns_stations_in_view_with_weather(self):
+        calls = []
+        net.metars_in_bbox = lambda *box: calls.append(box) or [dict(s) for s in FAKE] + [
+            {"icao": "KJFK", "raw": "KJFK 201000Z 31010KT 10SM FEW250 05/M05 A3012", "lat": 40.64, "lon": -73.78,
+             "elev_m": 4, "name": "New York JFK Intl", "dist_km": 0.0}]
+        self.app.area_cache.clear()
+        r = json.loads(self.get("/api/area?s=39&w=-5&n=42&e=-2&cols=20&rows=20"))
+        self.assertEqual(sorted(s["icao"] for s in r["stations"]), ["LEMD", "LETO"])
+        self.assertEqual(r["total"], 2)
+        self.assertIn("weather", r["stations"][0])
+        self.get("/api/area?s=39.1&w=-4.9&n=41.9&e=-2.1")  # small pan: served from cache
+        self.assertEqual(len(calls), 1)
+
+    def test_area_bad_bbox(self):
+        for q in ("s=1&w=2&n=3", "s=a&w=1&n=2&e=3", "s=nan&w=1&n=2&e=3"):
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                self.get("/api/area?" + q)
+            self.assertEqual(cm.exception.code, 400)
+
+    def test_area_crossing_antimeridian(self):
+        net.metars_in_bbox = lambda *box: [
+            {"icao": "NFFN", "raw": "NFFN 201000Z 09010KT 9999 FEW020 28/22 Q1010", "lat": -17.75, "lon": 177.44,
+             "elev_m": 18, "name": "Nadi Intl", "dist_km": 0.0},
+            {"icao": "NSTU", "raw": "NSTU 201000Z 09010KT 9999 FEW020 28/22 Q1010", "lat": -14.33, "lon": -170.71,
+             "elev_m": 10, "name": "Pago Pago", "dist_km": 0.0}]
+        self.app.area_cache.clear()
+        # Leaflet reports east > 180 after panning past the date line.
+        r = json.loads(self.get("/api/area?s=-25&w=170&n=-10&e=195"))
+        self.assertEqual(sorted(s["icao"] for s in r["stations"]), ["NFFN", "NSTU"])
 
     def test_search_empty_and_failure(self):
         self.assertIn("error", json.loads(self.get("/api/search?q=")))
@@ -182,6 +213,13 @@ class TestNetClean(unittest.TestCase):
         res = net._clean([{"icaoId": "A"}, {"icaoId": "LEMD", "rawOb": "x", "lat": 1, "lon": 2}, "basura"])
         self.assertEqual([r["icao"] for r in res], ["LEMD"])
         self.assertEqual(net._clean(None), [])
+
+    def test_thin_grid_one_per_cell_prefers_intl(self):
+        st = [{"icao": "AAAA", "name": "Small field", "lat": 0.1, "lon": 0.1},
+              {"icao": "BBBB", "name": "Big Intl", "lat": 0.2, "lon": 0.2},
+              {"icao": "CCCC", "name": "", "lat": 9.9, "lon": 9.9}]
+        res = net.thin_grid(st, 0, 0, 10, 10, 2, 2)
+        self.assertEqual(sorted(s["icao"] for s in res), ["BBBB", "CCCC"])
 
 
 if __name__ == "__main__":
