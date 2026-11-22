@@ -1,2 +1,2 @@
 """FSX Weather Live: tiempo real para FSX a partir de METAR públicos de NOAA."""
-__version__ = "0.1.1"
+__version__ = "0.2.0"

@@ -238,3 +238,54 @@ def summary(d, lang="es"):
 
 def summary_es(d):
     return summary(d, "es")
+
+
+_COND_TXT = {
+    "es": {"clear": "Despejado", "few": "Poco nuboso", "partly": "Parcialmente nuboso",
+           "cloudy": "Muy nuboso", "overcast": "Cubierto", "mist": "Neblina", "fog": "Niebla",
+           "haze": "Calima", "drizzle": "Llovizna", "rain": "Lluvia", "showers": "Chubascos",
+           "snow": "Nieve", "hail": "Granizo", "thunder": "Tormenta", "unknown": "Sin datos"},
+    "en": {"clear": "Clear", "few": "Mostly clear", "partly": "Partly cloudy",
+           "cloudy": "Mostly cloudy", "overcast": "Overcast", "mist": "Mist", "fog": "Fog",
+           "haze": "Haze", "drizzle": "Drizzle", "rain": "Rain", "showers": "Showers",
+           "snow": "Snow", "hail": "Hail", "thunder": "Thunderstorm", "unknown": "No data"},
+}
+_COVER_RANK = {"FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4}
+
+
+def condition(d):
+    """Categoría de tiempo para elegir el icono del mapa (el fenómeno manda sobre las nubes)."""
+    wx = " ".join(t for t in d.get("wx", []) if not t.startswith("VC"))
+    if "TS" in wx:
+        return "thunder"
+    if "GR" in wx or "GS" in wx:
+        return "hail"
+    if any(p in wx for p in ("SN", "SG", "PL", "PE", "IC")):
+        return "snow"
+    if "SH" in wx:
+        return "showers"
+    if "RA" in wx:
+        return "rain"
+    if "DZ" in wx:
+        return "drizzle"
+    if "FG" in wx:
+        return "fog"
+    if "BR" in wx:
+        return "mist"
+    if any(p in wx for p in ("HZ", "FU", "DU", "SA", "VA")):
+        return "haze"
+    clouds = d.get("clouds") or []
+    if clouds:
+        top = max(_COVER_RANK.get(c["cover"], 0) for c in clouds)
+        return {1: "few", 2: "partly", 3: "cloudy", 4: "overcast"}.get(top, "clear")
+    if d.get("cavok") or d.get("vis_m") is not None or d.get("wind"):
+        return "clear"
+    return "unknown"
+
+
+def weather_info(d, lang="es"):
+    """Datos compactos para los iconos y el panel del mapa."""
+    c = condition(d)
+    return {"cond": c, "text": _COND_TXT.get(lang, _COND_TXT["es"])[c],
+            "wind": d.get("wind"), "vis_m": d.get("vis_m"), "temp": d.get("temp"),
+            "dew": d.get("dew"), "qnh_hpa": d.get("qnh_hpa")}

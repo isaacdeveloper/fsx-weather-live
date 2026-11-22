@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from fsxwl.metar import parse_metar, to_simconnect, summary_es  # noqa: E402
+from fsxwl.metar import parse_metar, to_simconnect, summary_es, condition, weather_info  # noqa: E402
 
 NOW = datetime(2026, 11, 20, 10, 5, tzinfo=timezone.utc)
 
@@ -15,6 +15,29 @@ def conv(raw, **kw):
 
 
 class TestMetar(unittest.TestCase):
+    def test_condition_categories(self):
+        cases = {
+            "LEMD 201000Z 27012KT CAVOK 14/05 Q1021": "clear",
+            "LEMD 201000Z 27012KT 9999 FEW030 14/05 Q1021": "few",
+            "LEMD 201000Z 27012KT 9999 FEW030 BKN080 14/05 Q1021": "cloudy",
+            "EGLL 201000Z 22015KT 6000 -RA OVC012 10/09 Q1002": "rain",
+            "EGLL 201000Z 22015KT 6000 -SHRA SCT020CB 10/09 Q1002": "showers",
+            "KJFK 201000Z 18020G35KT 2SM +TSRA BKN015CB 22/20 A2970": "thunder",
+            "ENGM 201000Z 01005KT 1500 SN OVC008 M03/M04 Q0998": "snow",
+            "LEBL 201000Z 00000KT 0200 FG VV001 08/08 Q1025": "fog",
+            "LEBL 201000Z 00000KT 4000 BR NSC 08/07 Q1025": "mist",
+            "LEBL 201000Z 00000KT 9999 VCSH FEW040 18/10 Q1025": "few",
+        }
+        for raw, exp in cases.items():
+            self.assertEqual(condition(parse_metar(raw)), exp, raw)
+
+    def test_weather_info(self):
+        w = weather_info(parse_metar("EGLL 201000Z 22015G28KT 6000 -RA OVC012 10/09 Q1002"), "en")
+        self.assertEqual(w["cond"], "rain")
+        self.assertEqual(w["text"], "Rain")
+        self.assertEqual(w["wind"], {"dir": 220, "kt": 15, "gust_kt": 28})
+        self.assertEqual((w["temp"], w["dew"], w["qnh_hpa"], w["vis_m"]), (10, 9, 1002, 6000))
+
     def test_europe_icao(self):
         d, s = conv("LEMD 201000Z 27012G22KT 240V300 9999 FEW030 SCT080 14/05 Q1021 NOSIG")
         self.assertEqual(d["wind"], {"dir": 270, "kt": 12, "gust_kt": 22})

@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qs
 
 from . import net
 from .i18n import SUPPORTED, get_lang, set_lang, t
-from .metar import parse_metar, to_simconnect, summary
+from .metar import parse_metar, to_simconnect, summary, weather_info
 from .sim import Sim
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -87,7 +87,8 @@ class App:
     @staticmethod
     def _public(stations):
         lang = get_lang()
-        return [dict({k: v for k, v in s.items() if k != "_d"}, summary=summary(s["_d"], lang))
+        return [dict({k: v for k, v in s.items() if k != "_d"}, summary=summary(s["_d"], lang),
+                     weather=weather_info(s["_d"], lang))
                 for s in stations]
 
     @staticmethod

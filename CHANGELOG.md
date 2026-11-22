@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+## [0.2.0] - 2026-11-22
+
+### Added
+- Weather symbols on the map: each station shows an icon (sun/moon, clouds, rain, snow, fog, storm), temperature and a wind arrow with speed/gusts, colour-coded by strength.
+- Corner panel (top right, collapsible) with the weather at the station nearest the aircraft: condition, temperature, wind, visibility, dew point and QNH.
+- `weather` object (condition category + key values) in each station of `/api/state` and `/api/search`.
+
 ## [0.1.1]
 
 ### Added

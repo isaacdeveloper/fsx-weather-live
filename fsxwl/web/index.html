@@ -26,6 +26,21 @@
   .raw { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; word-break: break-all; color: #475467; }
   .warn { color: #b3261e; }
   pre { margin: 0; max-height: 140px; overflow: auto; font-size: 11px; background: #101418; color: #d6dde6; padding: 8px; border-radius: 6px; white-space: pre-wrap; }
+  .wxm { display: flex; align-items: center; gap: 2px; white-space: nowrap; background: rgba(255,255,255,.88);
+         border: 1.5px solid var(--c, #3b6fd4); border-radius: 12px; padding: 1px 6px 1px 3px; font-size: 11px; font-weight: 600;
+         box-shadow: 0 1px 3px rgba(0,0,0,.25); width: max-content; transform: translate(-50%, -50%); cursor: pointer; }
+  .wxm .ic { font-size: 18px; line-height: 20px; }
+  .wxm svg { display: block; }
+  #wxpanel { background: rgba(255,255,255,.95); border-radius: 10px; padding: 10px 12px; min-width: 200px;
+             box-shadow: 0 2px 8px rgba(0,0,0,.25); font: 13px/1.35 system-ui, Segoe UI, sans-serif; color: #1b1f24; }
+  #wxpanel .hd { font-size: 11px; color: #667085; text-transform: uppercase; letter-spacing: .03em; }
+  #wxpanel .big { display: flex; align-items: center; gap: 10px; margin: 4px 0 6px; }
+  #wxpanel .big .ic { font-size: 42px; line-height: 46px; }
+  #wxpanel .big .tp { font-size: 26px; font-weight: 700; }
+  #wxpanel .wind { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  #wxpanel .wind svg { flex: none; }
+  #wxpanel .det { color: #475467; font-size: 12px; margin-top: 4px; }
+  #wxpanel .tg { float: right; cursor: pointer; color: #667085; margin-left: 8px; font-size: 14px; }
   .plane { font-size: 24px; line-height: 24px; text-align: center; color: #b3261e; text-shadow: 0 0 3px #fff; }
 </style>
 </head>
@@ -78,7 +93,84 @@ const map = L.map('map').setView([40.47, -3.56], 7);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 18, attribution: '© OpenStreetMap'}).addTo(map);
 const stationLayer = L.layerGroup().addTo(map);
 const searchLayer = L.layerGroup().addTo(map);
-let planeMarker = null, centered = false, injectOn = false, lastUpdated = null;
+let planeMarker = null, centered = false, injectOn = false, lastUpdated = null, lastStations = [], lastPos = null;
+
+// ---------- weather symbols ----------
+const WX_ICON = {clear: '☀️', few: '🌤️', partly: '⛅', cloudy: '🌥️', overcast: '☁️', mist: '🌫️', fog: '🌫️',
+                 haze: '🌫️', drizzle: '🌦️', rain: '🌧️', showers: '🌦️', snow: '🌨️', hail: '🌨️', thunder: '⛈️', unknown: '❔'};
+const WX_NIGHT = {clear: '🌙', few: '🌙', partly: '☁️'};
+// Approximate solar elevation (degrees), used to show the moon at night.
+function sunElev(lat, lon, ms) {
+  const d = ms / 86400000 - 10957.5, g = (357.529 + 0.98560028 * d) * Math.PI / 180;
+  const q = 280.459 + 0.98564736 * d, Lr = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * Math.PI / 180;
+  const e = (23.439 - 0.00000036 * d) * Math.PI / 180, dec = Math.asin(Math.sin(e) * Math.sin(Lr));
+  const ra = Math.atan2(Math.cos(e) * Math.sin(Lr), Math.cos(Lr)) * 180 / Math.PI;
+  const gmst = (18.697374558 + 24.06570982441908 * d) * 15, ha = (gmst + lon - ra) * Math.PI / 180, la = lat * Math.PI / 180;
+  return Math.asin(Math.sin(la) * Math.sin(dec) + Math.cos(la) * Math.cos(dec) * Math.cos(ha)) * 180 / Math.PI;
+}
+function wxIcon(s) {
+  const c = (s.weather && s.weather.cond) || 'unknown';
+  if (WX_NIGHT[c] && sunElev(s.lat, s.lon, Date.now()) < -3) return WX_NIGHT[c];
+  return WX_ICON[c] || WX_ICON.unknown;
+}
+// Arrow pointing where the wind blows TO (METAR gives where it comes FROM).
+function windArrow(w, size, color) {
+  if (!w || (!w.kt && !w.gust_kt)) return '';
+  if (w.dir == null) return `<svg width="${size}" height="${size}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="${color}" stroke-width="2.5" stroke-dasharray="4 3"/></svg>`;
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" style="transform:rotate(${(w.dir + 180) % 360}deg)"><path d="M12 2 L18.5 11 L14 11 L14 22 L10 22 L10 11 L5.5 11 Z" fill="${color}" stroke="#fff" stroke-width="1"/></svg>`;
+}
+function windColor(w) {
+  const k = w ? Math.max(w.kt || 0, w.gust_kt || 0) : 0;
+  return k >= 35 ? '#b3261e' : k >= 20 ? '#c2410c' : k >= 10 ? '#3b6fd4' : '#1a7f37';
+}
+function windText(w) {
+  if (!w) return '';
+  if (!w.kt && !w.gust_kt) return T('calm');
+  return (w.dir == null ? T('vrb') : String(w.dir).padStart(3, '0') + '°') + ' ' + w.kt + (w.gust_kt ? 'G' + w.gust_kt : '') + ' kt';
+}
+function km(a, b, c, d) {
+  const r = Math.PI / 180, x = Math.sin((c - a) * r / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin((d - b) * r / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(x));
+}
+
+const WxPanel = L.Control.extend({
+  options: {position: 'topright'},
+  onAdd() {
+    const div = L.DomUtil.create('div'); div.id = 'wxpanel';
+    L.DomEvent.disableClickPropagation(div); L.DomEvent.disableScrollPropagation(div);
+    return div;
+  }
+});
+map.addControl(new WxPanel());
+let panelMin = false;
+try { panelMin = localStorage.getItem('wxpanelMin') === '1'; } catch (e) {}
+// Corner panel: weather at the station nearest the aircraft (or the map's area if FSX is not connected).
+function renderPanel() {
+  const el = $('wxpanel');
+  if (!lastStations.length) { el.style.display = 'none'; return; }
+  el.style.display = '';
+  let s = lastStations[0], dist = s.dist_km;
+  if (lastPos) {
+    dist = Infinity;
+    lastStations.forEach(x => { const k = km(lastPos.lat, lastPos.lon, x.lat, x.lon); if (k < dist) { s = x; dist = k; } });
+  }
+  const w = s.weather || {}, col = windColor(w.wind);
+  const tg = `<span class="tg" id="wxtg" title="${panelMin ? T('expand') : T('collapse')}">${panelMin ? '▸' : '▾'}</span>`;
+  const hd = `<div class="hd">${tg}${T(lastPos ? 'wxPlane' : 'wxHere')} · ${s.icao}${dist != null ? ' · ' + Math.round(dist) + ' km' : ''}</div>`;
+  if (panelMin) {
+    el.innerHTML = hd + `<div class="wind" style="margin-top:4px"><span style="font-size:22px">${wxIcon(s)}</span>${w.temp != null ? w.temp + '°' : ''}${windArrow(w.wind, 22, col)}${windText(w.wind)}</div>`;
+  } else {
+    const det = [];
+    if (w.vis_m != null) det.push(T('visL') + ' ' + (w.vis_m >= 9999 ? '≥10 km' : (w.vis_m / 1000).toFixed(1) + ' km'));
+    if (w.dew != null) det.push(T('dewL') + ' ' + w.dew + '°C');
+    if (w.qnh_hpa) det.push('QNH ' + w.qnh_hpa);
+    el.innerHTML = hd +
+      `<div class="big"><span class="ic">${wxIcon(s)}</span><div><div class="tp">${w.temp != null ? w.temp + '°C' : '–'}</div><div>${w.text || ''}</div></div></div>` +
+      `<div class="wind">${windArrow(w.wind, 34, col)}<div>${T('windL')}<br><span style="color:${col}">${windText(w.wind) || '–'}</span></div></div>` +
+      `<div class="det">${det.join(' · ')}</div>`;
+  }
+  $('wxtg').onclick = () => { panelMin = !panelMin; try { localStorage.setItem('wxpanelMin', panelMin ? '1' : '0'); } catch (e) {} renderPanel(); };
+}
 
 
 const $ = id => document.getElementById(id);
@@ -92,7 +184,9 @@ const I18N = {
        injHint: 'Empieza desactivada. Actívala con el vuelo ya cargado.',
        last: (t, m) => `Última descarga: ${t} (cada ${m} min)`, loading: 'Descargando…',
        confirm: 'Se va a cambiar el tiempo de FSX con datos reales.\nConviene tener el vuelo ya cargado. ¿Continuar?',
-       searching: 'Buscando…', noStations: ' (sin estaciones cerca)'},
+       searching: 'Buscando…', noStations: ' (sin estaciones cerca)',
+       wxPlane: 'Tiempo en el avión', wxHere: 'Tiempo en la zona', windL: 'Viento', visL: 'Vis.', dewL: 'Rocío',
+       calm: 'Calma', vrb: 'Variable', expand: 'Ampliar', collapse: 'Reducir'},
   en: {follow: 'Follow the aircraft on the map', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
        refresh: 'Refresh', logt: 'Log', ph: 'Address or ICAO (e.g. KJFK)',
        credits: 'Data: NOAA Aviation Weather Center. Map: OpenStreetMap.',
@@ -102,7 +196,9 @@ const I18N = {
        injHint: 'Starts disabled. Enable it once your flight is loaded.',
        last: (t, m) => `Last download: ${t} (every ${m} min)`, loading: 'Downloading…',
        confirm: "This will change FSX's weather using real data.\nIt is best to have your flight already loaded. Continue?",
-       searching: 'Searching…', noStations: ' (no stations nearby)'}
+       searching: 'Searching…', noStations: ' (no stations nearby)',
+       wxPlane: 'Weather at aircraft', wxHere: 'Local weather', windL: 'Wind', visL: 'Vis.', dewL: 'Dew pt',
+       calm: 'Calm', vrb: 'Variable', expand: 'Expand', collapse: 'Collapse'}
 };
 let lang = 'es';
 const T = k => I18N[lang][k];
@@ -127,7 +223,11 @@ function stationItem(s, extra) {
   return div;
 }
 function stationMarker(s, color) {
-  const m = L.circleMarker([s.lat, s.lon], {radius: 7, color: color, fillColor: color, fillOpacity: .6});
+  const w = s.weather || {};
+  const html = `<div class="wxm" style="--c:${color}"><span class="ic">${wxIcon(s)}</span>` +
+    `${w.temp != null ? '<span>' + w.temp + '°</span>' : ''}${windArrow(w.wind, 16, windColor(w.wind))}` +
+    `${w.wind && (w.wind.kt || w.wind.gust_kt) ? '<span>' + w.wind.kt + (w.wind.gust_kt ? 'G' + w.wind.gust_kt : '') + '</span>' : ''}</div>`;
+  const m = L.marker([s.lat, s.lon], {icon: L.divIcon({className: '', html, iconSize: [0, 0]}), title: s.icao});
   const box = document.createElement('div');
   const t = document.createElement('b'); t.textContent = s.icao;
   const a = document.createElement('div'); a.textContent = s.summary || '';
@@ -145,6 +245,7 @@ async function tick() {
   $('simdot').className = 'dot' + (sim.connected ? ' ok' : '');
   $('simtxt').textContent = sim.connected ? T('simOn') : T('simOff');
   $('simerr').textContent = sim.connected ? '' : (sim.error || '');
+  lastPos = sim.pos || null;
   if (sim.pos) {
     $('simpos').textContent = T('pos')(sim.pos);
     // SVG silhouette with the nose pointing north, so the heading applies directly (the ✈ glyph points ~45° depending on the font).
@@ -169,7 +270,9 @@ async function tick() {
     const list = $('list'); list.replaceChildren();
     stationLayer.clearLayers();
     st.stations.forEach(s => { list.append(stationItem(s)); stationLayer.addLayer(stationMarker(s, '#3b6fd4')); });
+    lastStations = st.stations;
   }
+  renderPanel();
   if (!centered && st.stations.length) { map.setView([st.center.lat, st.center.lon], 7); centered = true; }
   $('log').textContent = st.log.join('\n');
 }
