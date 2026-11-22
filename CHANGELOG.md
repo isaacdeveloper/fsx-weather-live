@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-22
+
+### Added
+- Clicking an airport on the map (or in the nearby-stations list) puts its ICAO code in the search box.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

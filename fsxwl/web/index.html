@@ -225,9 +225,11 @@ function stationItem(s, extra) {
   const sum = document.createElement('div'); sum.textContent = s.summary || '';
   const raw = document.createElement('div'); raw.className = 'raw'; raw.textContent = s.raw;
   div.append(b, sum, raw);
-  div.onclick = () => map.setView([s.lat, s.lon], Math.max(map.getZoom(), 9));
+  div.onclick = () => { selectAirport(s); map.setView([s.lat, s.lon], Math.max(map.getZoom(), 9)); };
   return div;
 }
+// Selecting an airport puts its ICAO code in the search box.
+function selectAirport(s) { $('q').value = s.icao; $('searchmsg').textContent = ''; }
 function stationMarker(s, color) {
   const w = s.weather || {};
   const html = `<div class="wxm" style="--c:${color}"><span class="id">${s.icao}</span><span class="ic">${wxIcon(s)}</span>` +
@@ -240,6 +242,7 @@ function stationMarker(s, color) {
   const r = document.createElement('div'); r.className = 'raw'; r.textContent = s.raw;
   box.append(t, a, r);
   m.bindPopup(box);
+  m.on('click', () => selectAirport(s));
   return m;
 }
 
