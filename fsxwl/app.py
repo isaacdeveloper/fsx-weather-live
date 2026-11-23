@@ -27,6 +27,9 @@ DEFAULTS = {
     "default_lat": 40.472,
     "default_lon": -3.561,
     "metar_type_keyword": False,
+    "transition_seconds": 0,        # phase-in time FSX uses to reach each new METAR (0 = immediate)
+    "freeze_dynamics": True,        # stop FSX evolving the injected weather on its own
+    "restore_dynamic_rate": 1,      # dynamic weather rate (0-5) set back when injection is disabled
     "simconnect_dll": "auto",
 }
 
@@ -129,9 +132,19 @@ class App:
         if not (self.sim.connected and stations):
             self.inject_note = ("note_nosend", {})
             return
-        secs = int(self.cfg["update_minutes"] * 60 * 2)
-        self.sim.post(Sim.cmd_apply, stations, secs)
+        secs = int(self.cfg["transition_seconds"])
+        self.sim.post(Sim.cmd_apply, stations, secs, bool(self.cfg["freeze_dynamics"]))
         self.inject_note = ("note_sent", {"time": datetime.now().strftime("%H:%M:%S")})
+        for delay in (10, 90):
+            tm = threading.Timer(delay, self._check, args=("+%ds" % delay,))
+            tm.daemon = True
+            tm.start()
+
+    def _check(self, label):
+        """Logs what FSX really has near the aircraft, to spot the sim overriding the injection."""
+        p = self.sim.pos
+        if self.inject and self.sim.connected and p:
+            self.sim.post(Sim.cmd_check, p["lat"], p["lon"], label)
 
     def set_inject(self, enabled):
         with self.lock:
@@ -141,13 +154,16 @@ class App:
         if enabled:
             if not self.sim.connected:
                 self.inject_note = ("note_wait", {})
-            self.sim.post(Sim.cmd_enable_custom)
+            self.sim.post(Sim.cmd_enable_custom, bool(self.cfg["freeze_dynamics"]))
             self._push()
             self.log(t("log_inj_on"))
         else:
-            self.sim.post(Sim.cmd_restore_global)
+            self.sim.post(Sim.cmd_restore_global, self._restore_rate())
             self.inject_note = ("note_off", {})
             self.log(t("log_inj_off"))
+
+    def _restore_rate(self):
+        return self.cfg["restore_dynamic_rate"] if self.cfg["freeze_dynamics"] else None
 
     def diag(self):
         pos = self.sim.pos
@@ -266,7 +282,7 @@ class App:
             pass
         finally:
             if self.inject and self.sim.connected:
-                self.sim.post(Sim.cmd_restore_global)
+                self.sim.post(Sim.cmd_restore_global, self._restore_rate())
                 time.sleep(1.0)
             self._stop.set()
             self.sim.stop()

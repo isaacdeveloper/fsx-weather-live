@@ -81,6 +81,21 @@ class TestApp(unittest.TestCase):
         self.assertFalse(self.app.inject)
         self.assertIn("cmd_restore_global", [p[0] for p in self.posted])
 
+    def test_inject_sends_immediately_and_freezes_dynamics(self):
+        self.posted.clear()
+        self.app.sim.connected = True
+        try:
+            self.app.set_inject(True)
+            apply = [p for p in self.posted if p[0] == "cmd_apply"][0]
+            self.assertEqual(apply[1][1], 0)      # no 10-minute phase-in: FSX applies it at once
+            self.assertTrue(apply[1][2])          # dynamic weather frozen
+            self.app.set_inject(False)
+            restore = [p for p in self.posted if p[0] == "cmd_restore_global"][0]
+            self.assertEqual(restore[1], (1,))    # dynamic rate given back
+        finally:
+            self.app.inject = False
+            self.app.sim.connected = False
+
     def test_diag_requires_sim_and_header(self):
         with self.assertRaises(urllib.error.HTTPError):
             self.post("/api/diag", {})

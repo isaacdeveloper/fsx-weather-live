@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-23
+
+### Fixed
+- Injected weather seemed to switch back to FSX's default right after enabling injection: each METAR was sent with a 10-minute phase-in (`Seconds = 600`), so FSX kept showing its own weather while it slowly blended. It is now applied immediately (`transition_seconds`, default `0`).
+- FSX's dynamic weather could drift the injected conditions; the dynamic update rate is set to 0 while injecting and given back afterwards (`freeze_dynamics`, `restore_dynamic_rate`).
+- Disabling injection no longer tries to remove stations that already existed in FSX (dozens of `WEATHER_UNABLE_TO_REMOVE_STATION` in the log): only stations the app really created are removed.
+- The format diagnostic no longer leaves the test weather as FSX's global weather; it puts back the original GLOB observation.
+
+### Added
+- Readback checks 10 s and 90 s after each injection log what FSX actually has near the aircraft.
+
 ## [0.3.1] - 2026-11-22
 
 ### Added

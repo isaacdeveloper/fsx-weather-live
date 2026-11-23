@@ -49,6 +49,8 @@ STR = {
     "sim_exc_list": {"es": " | excepciones: {lst}", "en": " | exceptions: {lst}"},
     "sim_noexc": {"es": " | sin excepciones", "en": " | no exceptions"},
     "sim_readback": {"es": "FSX devuelve (petición {req}): {txt}", "en": "FSX returns (request {req}): {txt}"},
+    "sim_check": {"es": "Comprobación {label}: FSX tiene junto al avión: {txt}",
+                  "en": "Check {label}: FSX has near the aircraft: {txt}"},
     # --- diagnostic ---
     "dg_start": {"es": "DIAG ===== inicio =====", "en": "DIAG ===== start ====="},
     "dg_nonear": {"es": "DIAG FSX no devolvió ninguna estación cercana (¿no tiene estaciones aquí?)",
@@ -66,6 +68,7 @@ STR = {
     "dg_g1": {"es": "G1 GLOB sin METAR", "en": "G1 GLOB without METAR"},
     "dg_g2": {"es": "G2 GLOB con METAR", "en": "G2 GLOB with METAR"},
     "dg_g3": {"es": "G3 GLOB ejemplo MS", "en": "G3 GLOB MS example"},
+    "dg_restore": {"es": "restaurar GLOB original", "en": "restore original GLOB"},
 }
 
 

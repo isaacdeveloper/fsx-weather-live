@@ -45,6 +45,9 @@ Running from another location? Set `simconnect_dll` in `config.json` to the full
 | `max_cloud_layers` | `3` | Cloud layers sent per station |
 | `default_lat` / `default_lon` | Madrid | Map centre when FSX is not connected |
 | `metar_type_keyword` | `false` | See notes below; keep `false` |
+| `transition_seconds` | `0` | Seconds FSX takes to phase in each new METAR (`0` = immediately) |
+| `freeze_dynamics` | `true` | Stops FSX evolving the injected weather on its own (dynamic update rate 0) |
+| `restore_dynamic_rate` | `1` | Dynamic weather rate (0-5) set back when injection is disabled |
 | `simconnect_dll` | `"auto"` | `"auto"` = `..\SimConnect.dll`, or a full path |
 
 ## Notes on the SimConnect METAR format
@@ -55,7 +58,9 @@ FSX does not accept a standard METAR verbatim. Findings so far:
 - Accepted shape: `ICAO DDHHMMZ DDDSSKT[GXX] [DDDVDDD] VIS [wx] clouds TT/DD Qhhhh`, with visibility in `NNKM`, `NSM` or fractions and negative temperatures as `-05`.
 - `GLOB` is accepted as the station for global weather.
 
-The **Format diagnostic** button (with injection off) tries several variants and logs which ones FSX accepts. Results appear in the Log panel and in `fsxwl.log`. It leaves FSX in global mode with a test weather (wind 270°, clear); toggling injection on/off restores things.
+The **Format diagnostic** button (with injection off) tries several variants and logs which ones FSX accepts. Results appear in the Log panel and in `fsxwl.log`. It leaves FSX in global mode and then tries to put back the global weather FSX had before the test.
+
+While injection is on, the log shows two checks (`+10s` and `+90s`) with the weather FSX really has at the station nearest the aircraft. If they no longer match what was sent, something in FSX overwrote it: avoid opening the FSX Weather dialog, picking a weather theme or turning on FSX real-world weather while injecting.
 
 ## Safety
 

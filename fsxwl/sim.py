@@ -55,7 +55,9 @@ class Sim:
         self._q = queue.Queue()
         self._stop = threading.Event()
         self._created = set()
+        self._create_pkts = {}     # SimConnect packet id -> icao of a WeatherCreateStation call
         self._custom_on = False
+        self._checks = {}          # request id -> label of a post-injection readback check
         self._diag_running = False
         self._exc = []             # exceptions received (for the diagnostic)
         self._req = REQ_WX_BASE
@@ -107,6 +109,8 @@ class Sim:
         self._SetObs = sig("SimConnect_WeatherSetObservation", [H, U, C])
         self._ReqNearest = sig("SimConnect_WeatherRequestObservationAtNearestStation", [H, U, F, F])
         self._ReqStation = sig("SimConnect_WeatherRequestObservationAtStation", [H, U, C])
+        self._SetRate = sig("SimConnect_WeatherSetDynamicUpdateRate", [H, U])
+        self._LastPkt = sig("SimConnect_GetLastSentPacketID", [H, ctypes.POINTER(U)])
         self._dll = d
 
     def _connect(self):
@@ -123,6 +127,7 @@ class Sim:
         self._ReqData(h, REQ_POS, DEF_POS, OBJECT_ID_USER, PERIOD_SECOND, 0, 0, 0, 0)
         self.connected = True
         self._created.clear()
+        self._create_pkts.clear()
         self._custom_on = False
         self.log(t("sim_connected"))
         return True
@@ -156,6 +161,9 @@ class Sim:
                 name = EXC_NAMES[exc] if exc < len(EXC_NAMES) else str(exc)
                 self.last_error = t("sim_exc", name=name, pid=sendid, idx=idx)
                 self._exc.append(name)
+                if name == "WEATHER_UNABLE_TO_CREATE_STATION" and sendid in self._create_pkts:
+                    # The station already exists in FSX: it is not ours, so never remove it later.
+                    self._created.discard(self._create_pkts.pop(sendid))
                 if not self._diag_running:
                     self.log(self.last_error)
             elif rid == RECV_SIMOBJECT_DATA and cb.value >= 40 + 5 * 8:
@@ -168,7 +176,9 @@ class Sim:
                 req = struct.unpack_from("<I", data, 12)[0]
                 txt = data[16:].split(b"\0", 1)[0].decode("ascii", "replace")
                 self.readback[req] = txt
-                if req >= 5000:
+                if req in self._checks:
+                    self.log(t("sim_check", label=self._checks.pop(req), txt=txt))
+                elif req >= 5000:
                     self.log(t("sim_readback", req=req, txt=txt))
         return True
 
@@ -207,26 +217,37 @@ class Sim:
         self._req += 1
         return self._req
 
-    def cmd_enable_custom(self):
+    def _last_packet(self):
+        pid = ctypes.c_uint32()
+        return pid.value if self._LastPkt(self._h, ctypes.byref(pid)) == 0 else None
+
+    def cmd_enable_custom(self, freeze=True):
         hr = self._SetCustom(self._h)
         self._custom_on = True
         self.log("WeatherSetModeCustom hr=0x%08X" % (hr & 0xFFFFFFFF))
+        if freeze:
+            # Stop FSX from evolving ("dynamic weather") the injected conditions on its own.
+            hr = self._SetRate(self._h, 0)
+            self.log("WeatherSetDynamicUpdateRate(0) hr=0x%08X" % (hr & 0xFFFFFFFF))
 
-    def cmd_restore_global(self):
+    def cmd_restore_global(self, rate=None):
         if not self._custom_on and not self._created:
             return  # FSX weather was never touched on this connection: nothing to restore
         for icao in list(self._created):
             self._Remove(self._h, self._next_req(), icao.encode("ascii"))
         self._created.clear()
+        self._create_pkts.clear()
         self._custom_on = False
         hr = self._SetGlobal(self._h)
         self.log(t("sim_restore", hr=hr & 0xFFFFFFFF))
+        if rate is not None:
+            self._SetRate(self._h, int(rate))
 
-    def cmd_apply(self, stations, seconds):
+    def cmd_apply(self, stations, seconds, freeze=True):
         """stations: list of dicts with icao, name, lat, lon, elev_m, sim_metar."""
         from collections import Counter
         if not self._custom_on:
-            self.cmd_enable_custom()
+            self.cmd_enable_custom(freeze)
         self._exc.clear()
         self._diag_running = True      # silences per-exception logging
         ok = 0
@@ -237,6 +258,9 @@ class Sim:
                     hr = self._Create(self._h, self._next_req(), icao, s.get("name", "").encode("ascii", "ignore"),
                                       float(s["lat"]), float(s["lon"]), float(s.get("elev_m") or 0.0))
                     self._created.add(s["icao"])
+                    pid = self._last_packet()
+                    if pid is not None:
+                        self._create_pkts[pid] = s["icao"]
                     if hr != 0:
                         self.log("CreateStation %s hr=0x%08X" % (s["icao"], hr & 0xFFFFFFFF))
                 hr = self._SetObs(self._h, int(seconds), s["sim_metar"].encode("ascii", "ignore"))
@@ -252,6 +276,12 @@ class Sim:
             else t("sim_noexc")
         self.log(t("sim_sent", ok=ok, n=len(stations), extra=extra))
 
+    def cmd_check(self, lat, lon, label):
+        """Asks FSX what weather it has now at the station nearest the aircraft (logged on reply)."""
+        req = self._next_req()
+        self._checks[req] = label
+        self._ReqNearest(self._h, req, float(lat), float(lon))
+
     # ---------- diagnostic ----------
     def _pump(self, seconds):
         end = time.time() + seconds
@@ -261,7 +291,7 @@ class Sim:
 
     def _diag_set(self, label, metar):
         self._exc.clear()
-        hr = self._SetObs(self._h, 600, metar.encode("ascii", "ignore"))
+        hr = self._SetObs(self._h, 0, metar.encode("ascii", "ignore"))
         self._pump(0.8)
         res = list(self._exc)
         self.log("DIAG %-22s -> %s   [%s]" % (label, t("dg_ok") if not res and hr == 0
@@ -308,6 +338,10 @@ class Sim:
                 (t("dg_g3"), "GLOB 030405Z 27007KT 15SM SKC 17/13 A2992"),
             ]:
                 self._diag_set(label, m)
+            glob = self.readback.get(5002, "")
+            if glob:
+                # The G tests overwrote the global weather: put back what FSX had before.
+                self._diag_set(t("dg_restore"), glob)
             self.log(t("dg_end"))
         finally:
             self._diag_running = False
