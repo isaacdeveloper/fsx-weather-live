@@ -12,6 +12,7 @@ from urllib.parse import urlparse, parse_qs
 from . import net
 from .i18n import SUPPORTED, get_lang, set_lang, t
 from .metar import parse_metar, to_simconnect, summary, weather_info
+from .overlay import Overlay
 from .sim import Sim
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +31,10 @@ DEFAULTS = {
     "transition_seconds": 0,        # phase-in time FSX uses to reach each new METAR (0 = immediate)
     "freeze_dynamics": True,        # stop FSX evolving the injected weather on its own
     "restore_dynamic_rate": 1,      # dynamic weather rate (0-5) set back when injection is disabled
+    "overlay": True,                # always-on-top wind window (needs FSX in windowed mode)
+    "overlay_alpha": 0.85,
+    "overlay_x": 40,
+    "overlay_y": 40,
     "simconnect_dll": "auto",
 }
 
@@ -61,6 +66,7 @@ class App:
         self.inject = False
         self.inject_note = None
         self.sim = Sim(cfg["simconnect_dll"], self.log)
+        self.overlay = Overlay(self)
         self.area_cache = {}      # rounded bbox -> (time, built stations)
         self._stop = threading.Event()
         self._wake = threading.Event()
@@ -209,6 +215,7 @@ class App:
                 "fetch_error": self._render(self.fetch_error),
                 "inject": {"enabled": self.inject, "note": self._render(self.inject_note)},
                 "update_minutes": self.cfg["update_minutes"],
+                "overlay": self.overlay.visible,
                 "log": list(self.logbuf)[-40:],
             }
 
@@ -272,6 +279,7 @@ class App:
     def run(self):
         self.log(t("start"))
         self.sim.start()
+        self.overlay.start()
         threading.Thread(target=self.scheduler, daemon=True).start()
         handler = make_handler(self)
         srv = ThreadingHTTPServer(("127.0.0.1", self.cfg["port"]), handler)
@@ -346,6 +354,9 @@ def make_handler(app):
                 return self._json({"error": "json"}, 400)
             if self.path == "/api/inject":
                 app.set_inject(bool(data.get("enabled")))
+                return self._json({"ok": True})
+            if self.path == "/api/overlay":
+                app.overlay.set_visible(bool(data.get("enabled")))
                 return self._json({"ok": True})
             if self.path == "/api/diag":
                 return self._json({"ok": True, "msg": app.diag()})

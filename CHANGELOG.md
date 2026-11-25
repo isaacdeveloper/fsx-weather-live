@@ -5,6 +5,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-25
+
+### Added
+- Always-on-top wind window over FSX: the aircraft points up, an arrow shows where the wind comes from relative to the nose, plus headwind/tailwind (green/red) and crosswind (left/right) components. It uses the wind FSX actually has at the aircraft (`Ambient Wind Direction/Velocity`). Needs FSX in windowed mode; drag to move, right-click to hide, toggle from the web UI (`overlay`, `overlay_alpha`, `overlay_x`, `overlay_y`).
+- `POST /api/overlay` endpoint and `overlay` field in `/api/state`.
+
+### Changed
+- Aircraft data is read from SimConnect every 6th visual frame instead of once per second, so the wind window follows turns smoothly.
+
 ## [0.3.2] - 2026-11-23
 
 ### Fixed

@@ -54,6 +54,7 @@
     <div class="muted" id="simpos"></div>
     <div class="muted warn" id="simerr"></div>
     <label class="row" style="margin-top:6px"><input type="checkbox" id="follow" checked> <span data-i18n="follow"></span></label>
+    <label class="row" style="margin-top:4px"><input type="checkbox" id="overlay"> <span data-i18n="overlay"></span></label>
   </div>
 
   <div class="card">
@@ -179,7 +180,7 @@ function renderPanel() {
 
 const $ = id => document.getElementById(id);
 const I18N = {
-  es: {follow: 'Seguir al avión en el mapa', diag: 'Diagnóstico de formato', search: 'Buscar', near: 'Estaciones cercanas',
+  es: {follow: 'Seguir al avión en el mapa', overlay: 'Ventana de viento sobre FSX (FSX en ventana, Alt+Intro)', diag: 'Diagnóstico de formato', search: 'Buscar', near: 'Estaciones cercanas',
        refresh: 'Actualizar', logt: 'Registro', ph: 'Dirección o ICAO (p. ej. LEMD)',
        credits: 'Datos: NOAA Aviation Weather Center. Mapa: OpenStreetMap.',
        simOn: 'FSX conectado', simOff: 'FSX: sin conexión (el mapa funciona igualmente)',
@@ -192,7 +193,7 @@ const I18N = {
        wxPlane: 'Tiempo en el avión', wxHere: 'Tiempo en la zona', windL: 'Viento', visL: 'Vis.', dewL: 'Rocío',
        inView: (n, t) => `En el mapa: ${n} aeropuertos${t > n ? ' de ' + t : ''} (se actualiza al mover o hacer zoom)`, areaErr: 'No se pudo cargar el tiempo de esta zona',
        calm: 'Calma', vrb: 'Variable', expand: 'Ampliar', collapse: 'Reducir'},
-  en: {follow: 'Follow the aircraft on the map', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
+  en: {follow: 'Follow the aircraft on the map', overlay: 'Wind window on top of FSX (FSX windowed, Alt+Enter)', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
        refresh: 'Refresh', logt: 'Log', ph: 'Address or ICAO (e.g. KJFK)',
        credits: 'Data: NOAA Aviation Weather Center. Map: OpenStreetMap.',
        simOn: 'FSX connected', simOff: 'FSX: not connected (the map still works)',
@@ -291,6 +292,7 @@ async function tick() {
     centered = true;
   } else { $('simpos').textContent = ''; }
 
+  $('overlay').checked = !!st.overlay;
   injectOn = st.inject.enabled;
   $('injtxt').textContent = injectOn ? T('injOn') : T('injOff');
   $('injbtn').textContent = injectOn ? T('disable') : T('enable');
@@ -323,6 +325,7 @@ $('diagbtn').onclick = async () => {
 $('langbtn').onclick = async () => {
   await POST('/api/lang', {lang: lang === 'es' ? 'en' : 'es'}); await tick();
 };
+$('overlay').onchange = async () => { await POST('/api/overlay', {enabled: $('overlay').checked}); tick(); };
 $('refresh').onclick = async () => { await POST('/api/refresh'); setTimeout(tick, 1500); };
 $('go').onclick = async () => {
   const q = $('q').value; $('searchmsg').textContent = T('searching');

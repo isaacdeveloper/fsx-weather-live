@@ -30,7 +30,7 @@ EXC_NAMES = [
 # SIMCONNECT_RECV_ID (SimConnect.h)
 RECV_EXCEPTION, RECV_OPEN, RECV_QUIT, RECV_SIMOBJECT_DATA, RECV_WEATHER_OBS = 1, 2, 3, 8, 10
 DATATYPE_FLOAT64 = 4
-PERIOD_SECOND = 4
+PERIOD_VISUAL_FRAME = 3
 OBJECT_ID_USER = 0
 UNUSED = 0xFFFFFFFF
 
@@ -47,7 +47,7 @@ class Sim:
         self.dll_path = dll_path
         self.log = log
         self.connected = False
-        self.pos = None            # dict lat, lon, alt_ft, hdg, gs_kt, t
+        self.pos = None            # dict lat, lon, alt_ft, hdg, gs_kt, wind_dir, wind_kt, t
         self.readback = {}         # icao -> METAR returned by FSX
         self.last_error = ""
         self._h = None
@@ -121,10 +121,12 @@ class Sim:
         self._h = h
         names = [(b"Plane Latitude", b"degrees"), (b"Plane Longitude", b"degrees"),
                  (b"Plane Altitude", b"feet"), (b"Plane Heading Degrees True", b"degrees"),
-                 (b"Ground Velocity", b"knots")]
+                 (b"Ground Velocity", b"knots"),
+                 (b"Ambient Wind Direction", b"degrees"), (b"Ambient Wind Velocity", b"knots")]
         for n, u in names:
             self._AddDef(h, DEF_POS, n, u, DATATYPE_FLOAT64, 0.0, UNUSED)
-        self._ReqData(h, REQ_POS, DEF_POS, OBJECT_ID_USER, PERIOD_SECOND, 0, 0, 0, 0)
+        # Every 6th visual frame (~5-10 Hz) so the wind overlay follows turns smoothly.
+        self._ReqData(h, REQ_POS, DEF_POS, OBJECT_ID_USER, PERIOD_VISUAL_FRAME, 0, 0, 5, 0)
         self.connected = True
         self._created.clear()
         self._create_pkts.clear()
@@ -166,12 +168,12 @@ class Sim:
                     self._created.discard(self._create_pkts.pop(sendid))
                 if not self._diag_running:
                     self.log(self.last_error)
-            elif rid == RECV_SIMOBJECT_DATA and cb.value >= 40 + 5 * 8:
+            elif rid == RECV_SIMOBJECT_DATA and cb.value >= 40 + 7 * 8:
                 req = struct.unpack_from("<I", data, 12)[0]
                 if req == REQ_POS:
-                    lat, lon, alt, hdg, gs = struct.unpack_from("<5d", data, 40)
-                    self.pos = {"lat": lat, "lon": lon, "alt_ft": alt, "hdg": hdg,
-                                "gs_kt": gs, "t": time.time()}
+                    lat, lon, alt, hdg, gs, wdir, wkt = struct.unpack_from("<7d", data, 40)
+                    self.pos = {"lat": lat, "lon": lon, "alt_ft": alt, "hdg": hdg, "gs_kt": gs,
+                                "wind_dir": wdir, "wind_kt": wkt, "t": time.time()}
             elif rid == RECV_WEATHER_OBS:
                 req = struct.unpack_from("<I", data, 12)[0]
                 txt = data[16:].split(b"\0", 1)[0].decode("ascii", "replace")

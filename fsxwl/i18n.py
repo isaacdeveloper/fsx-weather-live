@@ -68,6 +68,18 @@ STR = {
     "dg_g1": {"es": "G1 GLOB sin METAR", "en": "G1 GLOB without METAR"},
     "dg_g2": {"es": "G2 GLOB con METAR", "en": "G2 GLOB with METAR"},
     "dg_g3": {"es": "G3 GLOB ejemplo MS", "en": "G3 GLOB MS example"},
+    # --- wind overlay ---
+    "ov_title": {"es": "VIENTO", "en": "WIND"},
+    "ov_nosim": {"es": "Esperando a FSX…", "en": "Waiting for FSX…"},
+    "ov_calm": {"es": "Calma", "en": "Calm"},
+    "ov_head": {"es": "De cara", "en": "Headwind"},
+    "ov_tail": {"es": "De cola", "en": "Tailwind"},
+    "ov_cross": {"es": "Cruzado", "en": "Cross"},
+    "ov_left": {"es": "desde la izq.", "en": "from left"},
+    "ov_right": {"es": "desde la dcha.", "en": "from right"},
+    "ov_notk": {"es": "Ventana de viento no disponible: este Python no tiene tkinter",
+                "en": "Wind window unavailable: this Python has no tkinter"},
+    "ov_fail": {"es": "Ventana de viento: {err}", "en": "Wind window: {err}"},
     "dg_restore": {"es": "restaurar GLOB original", "en": "restore original GLOB"},
 }
 

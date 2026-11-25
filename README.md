@@ -16,6 +16,7 @@ The app downloads free, public **METAR** reports from the NOAA Aviation Weather 
 - Optional injection of real weather into FSX (disabled by default; fully reversible).
 - Weather symbols on the map for each station (sun/moon, clouds, rain, snow, fog, storm) with temperature and a colour-coded wind arrow.
 - Corner panel with the weather at the station nearest your aircraft: condition, temperature, wind, visibility, dew point and QNH.
+- Always-on-top wind window: shows the wind FSX has at the aircraft relative to its nose, with headwind/tailwind and crosswind components. FSX must run in windowed mode (Alt+Enter) for it to appear on top; drag it with the left button, right-click hides it, and the "Wind window" checkbox in the web UI shows it again.
 - English / Spanish interface (toggle in the UI or `"language"` in `config.json`).
 - Python standard library only: nothing to install.
 
@@ -48,6 +49,9 @@ Running from another location? Set `simconnect_dll` in `config.json` to the full
 | `transition_seconds` | `0` | Seconds FSX takes to phase in each new METAR (`0` = immediately) |
 | `freeze_dynamics` | `true` | Stops FSX evolving the injected weather on its own (dynamic update rate 0) |
 | `restore_dynamic_rate` | `1` | Dynamic weather rate (0-5) set back when injection is disabled |
+| `overlay` | `true` | Show the always-on-top wind window at startup |
+| `overlay_alpha` | `0.85` | Wind window opacity (0-1) |
+| `overlay_x` / `overlay_y` | `40` / `40` | Wind window screen position at startup |
 | `simconnect_dll` | `"auto"` | `"auto"` = `..\SimConnect.dll`, or a full path |
 
 ## Notes on the SimConnect METAR format

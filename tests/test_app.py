@@ -81,6 +81,12 @@ class TestApp(unittest.TestCase):
         self.assertFalse(self.app.inject)
         self.assertIn("cmd_restore_global", [p[0] for p in self.posted])
 
+    def test_overlay_toggle(self):
+        self.post("/api/overlay", {"enabled": False}, {"X-FSXWL": "1"})
+        self.assertFalse(json.loads(self.get("/api/state"))["overlay"])
+        self.post("/api/overlay", {"enabled": True}, {"X-FSXWL": "1"})
+        self.assertTrue(json.loads(self.get("/api/state"))["overlay"])
+
     def test_inject_sends_immediately_and_freezes_dynamics(self):
         self.posted.clear()
         self.app.sim.connected = True
