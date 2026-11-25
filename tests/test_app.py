@@ -87,6 +87,52 @@ class TestApp(unittest.TestCase):
         self.post("/api/overlay", {"enabled": True}, {"X-FSXWL": "1"})
         self.assertTrue(json.loads(self.get("/api/state"))["overlay"])
 
+    def test_custom_preview_apply_and_clear(self):
+        form = {"scope": "area", "wind": {"dir": 90, "kt": 25, "gust_kt": 35}, "vis_m": 5000,
+                "wx": {"intensity": "-", "type": "RA"}, "clouds": [{"cover": "BKN", "base_ft": 1200}],
+                "temp": 12, "dew": 9, "qnh": 1001}
+        r = json.loads(self.post("/api/custom/preview", form, {"X-FSXWL": "1"}).read())
+        self.assertIn("GLOB", r["metar"])
+        self.assertIn("09025G35KT", r["metar"])
+        self.assertNotIn("METAR", r["metar"])
+        # Not connected: refused, nothing sent.
+        r = json.loads(self.post("/api/custom/apply", form, {"X-FSXWL": "1"}).read())
+        self.assertIn("error", r)
+        self.app.sim.connected = True
+        try:
+            self.posted.clear()
+            self.app.inject = True
+            r = json.loads(self.post("/api/custom/apply", form, {"X-FSXWL": "1"}).read())
+            self.assertTrue(r["ok"])
+            self.assertFalse(self.app.inject)          # custom replaces real injection
+            name, args = self.posted[-1]
+            self.assertEqual(name, "cmd_apply")
+            stations, secs, _freeze, glob = args
+            self.assertEqual([s["icao"] for s in stations], ["LEMD", "LETO"])
+            self.assertTrue(all("09025G35KT" in s["sim_metar"] for s in stations))
+            self.assertTrue(glob.startswith("GLOB "))
+            st = json.loads(self.get("/api/state"))["custom"]
+            self.assertTrue(st["active"])
+            # One station only.
+            r = json.loads(self.post("/api/custom/apply", dict(form, scope="station", icao="leto"),
+                                     {"X-FSXWL": "1"}).read())
+            stations, _s, _f, glob = self.posted[-1][1]
+            self.assertEqual([s["icao"] for s in stations], ["LETO"])
+            self.assertIsNone(glob)
+            # Clearing gives FSX its weather back.
+            self.post("/api/custom/clear", {}, {"X-FSXWL": "1"})
+            self.assertEqual(self.posted[-1][0], "cmd_restore_global")
+            self.assertFalse(json.loads(self.get("/api/state"))["custom"]["active"])
+        finally:
+            self.app.sim.connected = False
+            self.app.custom = None
+            self.app.inject = False
+
+    def test_custom_from_station(self):
+        r = json.loads(self.get("/api/custom/from?icao=lemd"))
+        self.assertEqual(r["form"]["wind"]["dir"], 270)
+        self.assertEqual(r["form"]["wind"]["gust_kt"], 22)
+
     def test_inject_sends_immediately_and_freezes_dynamics(self):
         self.posted.clear()
         self.app.sim.connected = True

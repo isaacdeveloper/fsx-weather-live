@@ -43,6 +43,29 @@
   #wxpanel .det { color: #475467; font-size: 12px; margin-top: 4px; }
   #wxpanel .tg { float: right; cursor: pointer; color: #667085; margin-left: 8px; font-size: 14px; }
   .plane { font-size: 24px; line-height: 24px; text-align: center; color: #b3261e; text-shadow: 0 0 3px #fff; }
+
+  details.card > summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; align-items: center; gap: 6px; }
+  details.card > summary::before { content: '▸'; color: #667085; }
+  details.card[open] > summary::before { content: '▾'; }
+  .cu h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #667085; }
+  .cu .grid { display: grid; grid-template-columns: 92px 1fr 56px; gap: 4px 6px; align-items: center; }
+  .cu .grid input[type=range] { width: 100%; }
+  .cu .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+  .cu select, .cu input[type=number], .cu input.icao { padding: 4px 6px; border: 1px solid #b9c0ca; border-radius: 6px; font: inherit; background: #fff; }
+  .cu input.icao { width: 70px; text-transform: uppercase; }
+  .cu .seg { display: inline-flex; border: 1px solid #b9c0ca; border-radius: 6px; overflow: hidden; }
+  .cu .seg button { border: 0; border-radius: 0; background: #fff; color: #1b1f24; padding: 4px 9px; }
+  .cu .seg button.on { background: #3b6fd4; color: #fff; }
+  .cu .dialwrap { display: flex; gap: 10px; align-items: center; }
+  .cu #cu_dial { width: 170px; height: 170px; flex: none; touch-action: none; cursor: grab; user-select: none; }
+  .cu .rel { font-size: 12px; line-height: 1.5; }
+  .cu .rel .h { color: #1a7f37; font-weight: 700; } .cu .rel .t { color: #b3261e; font-weight: 700; } .cu .rel .x { color: #b45309; font-weight: 700; }
+  .cu .quick { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .cu .quick button { padding: 3px 7px; font-size: 12px; }
+  .cu .layer { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .cu .layer input[type=number] { width: 84px; }
+  .cu .metar { font-family: ui-monospace, Consolas, monospace; font-size: 12px; background: #101418; color: #9be29b; padding: 6px 8px; border-radius: 6px; word-break: break-all; margin-top: 6px; }
+  .cu .active { background: #fff4e5; border: 1px solid #f0b35a; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -67,6 +90,77 @@
       <span class="muted" id="diagmsg"></span></div>
     <div class="muted" id="injnote"></div>
   </div>
+
+
+  <details class="card cu" id="cu">
+    <summary><span data-i18n="cuTitle"></span><span style="flex:1"></span><span class="muted" id="cu_badge"></span></summary>
+    <div id="cu_active" class="active" style="display:none"></div>
+
+    <div class="row" style="margin-top:8px">
+      <select id="cu_preset" style="flex:1;min-width:0"></select>
+      <button class="sec" id="cu_save" data-i18n="cuSave"></button>
+      <button class="sec" id="cu_del" title="" style="padding:6px 8px">🗑</button>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <span class="muted" data-i18n="cuFromReal"></span>
+      <input class="icao" id="cu_src" maxlength="4" placeholder="LEMD">
+      <button class="sec" id="cu_load" data-i18n="cuLoad"></button>
+    </div>
+    <div class="muted warn" id="cu_srcmsg"></div>
+
+    <h4 data-i18n="cuWhere"></h4>
+    <label class="row"><input type="radio" name="cu_scope" value="area" checked> <span data-i18n="cuArea"></span></label>
+    <label class="row"><input type="radio" name="cu_scope" value="station"> <span data-i18n="cuStation"></span>
+      <input class="icao" id="cu_icao" maxlength="4" placeholder="LERS"></label>
+    <div class="muted" data-i18n="cuStationHint"></div>
+
+    <h4 data-i18n="windL"></h4>
+    <div class="dialwrap">
+      <svg id="cu_dial" viewBox="0 0 200 200"></svg>
+      <div style="flex:1">
+        <div style="font-size:19px;font-weight:700;white-space:nowrap" id="cu_windtxt"></div>
+        <label class="row muted"><input type="checkbox" id="cu_vrb"> <span data-i18n="vrb"></span></label>
+        <div class="rel" id="cu_rel"></div>
+      </div>
+    </div>
+    <div class="muted" data-i18n="cuDialHint"></div>
+    <div class="quick" id="cu_quick"></div>
+    <div class="grid" style="margin-top:6px">
+      <span data-i18n="cuSpeed"></span><input type="range" id="cu_kt" min="0" max="70" step="1"><span class="val" id="cu_kt_v"></span>
+      <span data-i18n="cuGust"></span><input type="range" id="cu_gust" min="0" max="90" step="1"><span class="val" id="cu_gust_v"></span>
+      <span data-i18n="cuVar"></span><input type="range" id="cu_var" min="0" max="90" step="10"><span class="val" id="cu_var_v"></span>
+    </div>
+
+    <h4 data-i18n="cuSky"></h4>
+    <div class="grid">
+      <span data-i18n="visL"></span>
+      <select id="cu_vis" style="grid-column: span 2"></select>
+      <span data-i18n="cuPrecip"></span>
+      <select id="cu_wx" style="grid-column: span 2"></select>
+      <span data-i18n="cuInt"></span>
+      <span class="seg" id="cu_int" style="grid-column: span 2"><button data-v="-"></button><button data-v=""></button><button data-v="+"></button></span>
+    </div>
+    <div class="muted" style="margin:8px 0 4px" data-i18n="cuClouds"></div>
+    <div id="cu_layers"></div>
+
+    <h4 data-i18n="cuAir"></h4>
+    <div class="grid">
+      <span data-i18n="cuTemp"></span><input type="range" id="cu_temp" min="-40" max="45" step="1"><span class="val" id="cu_temp_v"></span>
+      <span data-i18n="dewL"></span><input type="range" id="cu_dew" min="-45" max="35" step="1"><span class="val" id="cu_dew_v"></span>
+      <span>QNH</span><input type="range" id="cu_qnh" min="950" max="1050" step="1"><span class="val" id="cu_qnh_v"></span>
+    </div>
+    <div class="muted" id="cu_qnh_in"></div>
+
+    <h4 data-i18n="cuApplyH"></h4>
+    <div class="row"><span data-i18n="cuTrans"></span>
+      <select id="cu_secs"><option value="0"></option><option value="60"></option><option value="300"></option><option value="900"></option></select></div>
+    <div class="metar" id="cu_metar"></div>
+    <div class="row" style="margin-top:8px">
+      <button id="cu_apply" data-i18n="cuApply" style="flex:1"></button>
+      <button class="off" id="cu_clear" data-i18n="cuClear"></button>
+    </div>
+    <div class="muted" id="cu_msg"></div>
+  </details>
 
   <div class="card">
     <div class="row">
@@ -192,7 +286,32 @@ const I18N = {
        searching: 'Buscando…', noStations: ' (sin estaciones cerca)',
        wxPlane: 'Tiempo en el avión', wxHere: 'Tiempo en la zona', windL: 'Viento', visL: 'Vis.', dewL: 'Rocío',
        inView: (n, t) => `En el mapa: ${n} aeropuertos${t > n ? ' de ' + t : ''} (se actualiza al mover o hacer zoom)`, areaErr: 'No se pudo cargar el tiempo de esta zona',
-       calm: 'Calma', vrb: 'Variable', expand: 'Ampliar', collapse: 'Reducir'},
+       calm: 'Calma', vrb: 'Variable', expand: 'Ampliar', collapse: 'Reducir',
+       cuTitle: 'Crear mi tiempo', cuSave: 'Guardar', cuFromReal: 'Partir del tiempo real de', cuLoad: 'Cargar',
+       cuWhere: 'Dónde', cuArea: 'Toda la zona (estaciones cercanas + global)', cuStation: 'Solo la estación',
+       cuStationHint: 'Clic en un aeropuerto del mapa para rellenar el ICAO.',
+       cuDialHint: 'Arrastra la flecha: marca de dónde VIENE el viento (Mayús = de 1 en 1).',
+       cuSpeed: 'Velocidad', cuGust: 'Rachas', cuVar: 'Variación ±', cuSky: 'Cielo y visibilidad',
+       cuPrecip: 'Fenómeno', cuInt: 'Intensidad', cuClouds: 'Capas de nubes (base en pies sobre el aeropuerto)',
+       cuAir: 'Temperatura y presión', cuTemp: 'Temperatura', cuApplyH: 'Aplicar', cuTrans: 'Transición',
+       cuApply: 'Aplicar en FSX', cuClear: 'Quitar', cuActive: 'Tiempo personalizado ACTIVO',
+       cuConfirmClear: '¿Quitar el tiempo personalizado y devolver a FSX su tiempo?',
+       cuSaveAsk: 'Nombre para guardar este tiempo:', cuMine: 'Mis tiempos', cuBuiltin: 'Predefinidos', cuPick: '— Elige un tiempo predefinido —',
+       cuNoHdg: 'Conecta FSX para ver el viento respecto a tu rumbo.',
+       cuRel: (h, x, side, hdg) => `Respecto a tu rumbo ${hdg}°:<br>${h}<br>${x}`,
+       cuHead: k => `<span class="h">De cara ${k} kt</span>`, cuTail: k => `<span class="t">De cola ${k} kt</span>`,
+       cuCross: (k, side) => `<span class="x">Cruzado ${k} kt ${side}</span>`, cuL: 'desde la izq.', cuR: 'desde la dcha.',
+       qHead: 'De cara', qTail: 'De cola', qXL: 'Cruzado izq.', qXR: 'Cruzado dcha.', qCalm: 'Calma',
+       trans: ['Inmediata', '1 minuto', '5 minutos', '15 minutos'],
+       ints: ['Débil', 'Moderada', 'Fuerte'], none: 'Ninguno', noCloud: 'Sin nubes', cb: 'CB',
+       covers: {FEW: 'Pocas (FEW)', SCT: 'Dispersas (SCT)', BKN: 'Muy nubosas (BKN)', OVC: 'Cubierto (OVC)'},
+       wxNames: {RA: 'Lluvia', SHRA: 'Chubascos', DZ: 'Llovizna', FZRA: 'Lluvia engelante', FZDZ: 'Llovizna engelante',
+                 SN: 'Nieve', SHSN: 'Chubascos de nieve', PE: 'Hielo granulado', TSRA: 'Tormenta con lluvia', TSSN: 'Tormenta con nieve',
+                 TSGR: 'Tormenta con granizo', TS: 'Tormenta seca', BR: 'Neblina', FG: 'Niebla', FZFG: 'Niebla engelante',
+                 HZ: 'Calima', SA: 'Arena', DU: 'Polvo'},
+       presets: {cavok: 'Despejado (CAVOK)', vfr: 'VFR agradable', xwind: 'Práctica de viento cruzado (25G35 a 90°)',
+                 gusty: 'Viento fuerte y racheado', ifr: 'IFR: techo bajo', fog: 'Niebla cerrada',
+                 storm: 'Tormenta', snow: 'Temporal de nieve', ice: 'Lluvia engelante'}},
   en: {follow: 'Follow the aircraft on the map', overlay: 'Wind window on top of FSX (FSX windowed, Alt+Enter)', diag: 'Format diagnostic', search: 'Search', near: 'Nearby stations',
        refresh: 'Refresh', logt: 'Log', ph: 'Address or ICAO (e.g. KJFK)',
        credits: 'Data: NOAA Aviation Weather Center. Map: OpenStreetMap.',
@@ -205,7 +324,32 @@ const I18N = {
        searching: 'Searching…', noStations: ' (no stations nearby)',
        wxPlane: 'Weather at aircraft', wxHere: 'Local weather', windL: 'Wind', visL: 'Vis.', dewL: 'Dew pt',
        inView: (n, t) => `On the map: ${n} airports${t > n ? ' of ' + t : ''} (updates as you pan or zoom)`, areaErr: 'Could not load weather for this area',
-       calm: 'Calm', vrb: 'Variable', expand: 'Expand', collapse: 'Collapse'}
+       calm: 'Calm', vrb: 'Variable', expand: 'Expand', collapse: 'Collapse',
+       cuTitle: 'Create my weather', cuSave: 'Save', cuFromReal: 'Start from the real weather at', cuLoad: 'Load',
+       cuWhere: 'Where', cuArea: 'Whole area (nearby stations + global)', cuStation: 'Only the station',
+       cuStationHint: 'Click an airport on the map to fill in the ICAO.',
+       cuDialHint: 'Drag the arrow: it marks where the wind comes FROM (Shift = 1° steps).',
+       cuSpeed: 'Speed', cuGust: 'Gusts', cuVar: 'Variation ±', cuSky: 'Sky and visibility',
+       cuPrecip: 'Weather', cuInt: 'Intensity', cuClouds: 'Cloud layers (base in feet above the airport)',
+       cuAir: 'Temperature and pressure', cuTemp: 'Temperature', cuApplyH: 'Apply', cuTrans: 'Transition',
+       cuApply: 'Apply in FSX', cuClear: 'Remove', cuActive: 'Custom weather ACTIVE',
+       cuConfirmClear: "Remove the custom weather and give FSX its own weather back?",
+       cuSaveAsk: 'Name to save this weather as:', cuMine: 'My weather', cuBuiltin: 'Presets', cuPick: '— Pick a preset —',
+       cuNoHdg: 'Connect FSX to see the wind relative to your heading.',
+       cuRel: (h, x, side, hdg) => `Relative to your heading ${hdg}°:<br>${h}<br>${x}`,
+       cuHead: k => `<span class="h">Headwind ${k} kt</span>`, cuTail: k => `<span class="t">Tailwind ${k} kt</span>`,
+       cuCross: (k, side) => `<span class="x">Crosswind ${k} kt ${side}</span>`, cuL: 'from left', cuR: 'from right',
+       qHead: 'Head', qTail: 'Tail', qXL: 'Cross left', qXR: 'Cross right', qCalm: 'Calm',
+       trans: ['Immediate', '1 minute', '5 minutes', '15 minutes'],
+       ints: ['Light', 'Moderate', 'Heavy'], none: 'None', noCloud: 'No cloud', cb: 'CB',
+       covers: {FEW: 'Few (FEW)', SCT: 'Scattered (SCT)', BKN: 'Broken (BKN)', OVC: 'Overcast (OVC)'},
+       wxNames: {RA: 'Rain', SHRA: 'Showers', DZ: 'Drizzle', FZRA: 'Freezing rain', FZDZ: 'Freezing drizzle',
+                 SN: 'Snow', SHSN: 'Snow showers', PE: 'Ice pellets', TSRA: 'Thunderstorm, rain', TSSN: 'Thunderstorm, snow',
+                 TSGR: 'Thunderstorm, hail', TS: 'Dry thunderstorm', BR: 'Mist', FG: 'Fog', FZFG: 'Freezing fog',
+                 HZ: 'Haze', SA: 'Sand', DU: 'Dust'},
+       presets: {cavok: 'Clear (CAVOK)', vfr: 'Pleasant VFR', xwind: 'Crosswind practice (25G35 at 90°)',
+                 gusty: 'Strong gusty wind', ifr: 'IFR: low ceiling', fog: 'Thick fog',
+                 storm: 'Thunderstorm', snow: 'Snowstorm', ice: 'Freezing rain'}}
 };
 let lang = 'en';
 const T = k => I18N[lang][k];
@@ -230,7 +374,10 @@ function stationItem(s, extra) {
   return div;
 }
 // Selecting an airport puts its ICAO code in the search box.
-function selectAirport(s) { $('q').value = s.icao; $('searchmsg').textContent = ''; }
+function selectAirport(s) {
+  $('q').value = s.icao; $('searchmsg').textContent = '';
+  if ($('cu').open) { $('cu_icao').value = s.icao; $('cu_src').value = s.icao; cuChanged(); }
+}
 function stationMarker(s, color) {
   const w = s.weather || {};
   const html = `<div class="wxm" style="--c:${color}"><span class="id">${s.icao}</span><span class="ic">${wxIcon(s)}</span>` +
@@ -275,7 +422,7 @@ map.on('moveend', () => { clearTimeout(areaTimer); areaTimer = setTimeout(() => 
 async function tick() {
   let st;
   try { st = await (await fetch('/api/state')).json(); } catch (e) { return; }
-  if (st.lang && st.lang !== lang) applyLang(st.lang);
+  if (st.lang && st.lang !== lang) { applyLang(st.lang); cuLang(); }
   const sim = st.sim;
   $('simdot').className = 'dot' + (sim.connected ? ' ok' : '');
   $('simtxt').textContent = sim.connected ? T('simOn') : T('simOff');
@@ -297,7 +444,7 @@ async function tick() {
   $('injtxt').textContent = injectOn ? T('injOn') : T('injOff');
   $('injbtn').textContent = injectOn ? T('disable') : T('enable');
   $('injbtn').className = injectOn ? 'off' : '';
-  $('injnote').textContent = st.inject.note || (injectOn ? '' : T('injHint'));
+  $('injnote').textContent = (st.custom && st.custom.active) ? '' : (st.inject.note || (injectOn ? '' : T('injHint')));
 
   $('upd').textContent = st.updated ? T('last')(new Date(st.updated * 1000).toLocaleTimeString(), st.update_minutes) : T('loading');
   $('fetcherr').textContent = st.fetch_error || '';
@@ -313,6 +460,7 @@ async function tick() {
   renderPanel();
   if (!centered && st.stations.length) { map.setView([st.center.lat, st.center.lon], 7); centered = true; }
   $('log').textContent = st.log.join('\n');
+  cuState(st.custom || {active: false});
 }
 
 $('injbtn').onclick = async () => {
@@ -323,7 +471,7 @@ $('diagbtn').onclick = async () => {
   const r = await (await POST('/api/diag')).json(); $('diagmsg').textContent = r.msg || ''; setTimeout(tick, 6000);
 };
 $('langbtn').onclick = async () => {
-  await POST('/api/lang', {lang: lang === 'es' ? 'en' : 'es'}); await tick();
+  await POST('/api/lang', {lang: lang === 'es' ? 'en' : 'es'}); await tick(); cuLang();
 };
 $('overlay').onchange = async () => { await POST('/api/overlay', {enabled: $('overlay').checked}); tick(); };
 $('refresh').onclick = async () => { await POST('/api/refresh'); setTimeout(tick, 1500); };
@@ -343,6 +491,229 @@ $('go').onclick = async () => {
   pin.bindPopup(box, {maxWidth: 360, maxHeight: 280}).openPopup();
 };
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') $('go').click(); });
+
+
+// ---------- custom weather editor ----------
+const VIS = [100000, 50000, 20000, 10000, 8000, 5000, 3000, 2000, 1600, 1200, 800, 600, 400, 200, 100];
+const WX_ORDER = ['', 'RA', 'SHRA', 'DZ', 'FZRA', 'FZDZ', 'SN', 'SHSN', 'PE', 'TSRA', 'TSSN', 'TSGR', 'TS', 'BR', 'FG', 'FZFG', 'HZ', 'SA', 'DU'];
+const WX_NO_INT = new Set(['', 'TS', 'BR', 'FG', 'FZFG', 'HZ', 'SA', 'DU']);
+const L3 = (a, b, c) => [a, b, c].filter(Boolean);
+const lay = (cover, base_ft, cb) => ({cover, base_ft, cb: !!cb});
+const PRESETS = {
+  cavok: {wind: {dir: 270, kt: 6, gust_kt: 0, var: 0}, vis_m: 100000, wx: {intensity: '', type: ''}, clouds: [], temp: 22, dew: 10, qnh: 1020},
+  vfr:   {wind: {dir: 240, kt: 10, gust_kt: 0, var: 0}, vis_m: 100000, wx: {intensity: '', type: ''}, clouds: L3(lay('FEW', 3500), lay('SCT', 6000)), temp: 18, dew: 9, qnh: 1016},
+  xwind: {rel: 90, wind: {dir: 0, kt: 25, gust_kt: 35, var: 0}, vis_m: 100000, wx: {intensity: '', type: ''}, clouds: L3(lay('SCT', 4000)), temp: 14, dew: 6, qnh: 1009},
+  gusty: {wind: {dir: 290, kt: 32, gust_kt: 50, var: 30}, vis_m: 100000, wx: {intensity: '', type: ''}, clouds: L3(lay('BKN', 3000)), temp: 11, dew: 4, qnh: 998},
+  ifr:   {wind: {dir: 180, kt: 8, gust_kt: 0, var: 0}, vis_m: 1600, wx: {intensity: '-', type: 'DZ'}, clouds: L3(lay('BKN', 300), lay('OVC', 800)), temp: 9, dew: 8, qnh: 1008},
+  fog:   {wind: {dir: 0, kt: 0, gust_kt: 0, var: 0}, vis_m: 200, wx: {intensity: '', type: 'FG'}, clouds: L3(lay('OVC', 100)), temp: 6, dew: 6, qnh: 1024},
+  storm: {wind: {dir: 230, kt: 22, gust_kt: 42, var: 40}, vis_m: 3000, wx: {intensity: '+', type: 'TSRA'}, clouds: L3(lay('SCT', 2000), lay('BKN', 3500, true), lay('OVC', 8000)), temp: 24, dew: 20, qnh: 1002},
+  snow:  {wind: {dir: 20, kt: 18, gust_kt: 28, var: 0}, vis_m: 800, wx: {intensity: '+', type: 'SN'}, clouds: L3(lay('OVC', 700)), temp: -4, dew: -6, qnh: 995},
+  ice:   {wind: {dir: 70, kt: 9, gust_kt: 0, var: 0}, vis_m: 3000, wx: {intensity: '-', type: 'FZRA'}, clouds: L3(lay('OVC', 1200)), temp: -1, dew: -2, qnh: 1006},
+};
+let cu = JSON.parse(JSON.stringify(PRESETS.vfr)), cuLoadedFromServer = false, cuPrevTimer = null;
+try { const saved = JSON.parse(localStorage.getItem('cuForm') || 'null'); if (saved && saved.wind) cu = saved; } catch (e) {}
+const cuMine = () => { try { return JSON.parse(localStorage.getItem('cuPresets') || '{}'); } catch (e) { return {}; } };
+const esc = t => String(t).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const norm = a => ((Math.round(a) % 360) + 360) % 360;
+
+function cuLang() {
+  const sel = $('cu_preset'), mine = cuMine();
+  sel.innerHTML = `<option value="">${T('cuPick')}</option><optgroup label="${T('cuBuiltin')}">` +
+    Object.keys(PRESETS).map(k => `<option value="p:${k}">${T('presets')[k]}</option>`).join('') + '</optgroup>' +
+    (Object.keys(mine).length ? `<optgroup label="${T('cuMine')}">` + Object.keys(mine).map(k => `<option value="m:${esc(k)}">${esc(k)}</option>`).join('') + '</optgroup>' : '');
+  $('cu_vis').innerHTML = VIS.map(v => `<option value="${v}">${v >= 1000 ? (v / 1000) + ' km' : v + ' m'}</option>`).join('');
+  $('cu_wx').innerHTML = WX_ORDER.map(k => `<option value="${k}">${k ? T('wxNames')[k] + ' (' + k + ')' : T('none')}</option>`).join('');
+  $('cu_int').querySelectorAll('button').forEach((b, i) => b.textContent = T('ints')[i]);
+  $('cu_secs').querySelectorAll('option').forEach((o, i) => o.textContent = T('trans')[i]);
+  $('cu_quick').innerHTML = [['head', 'qHead'], ['xl', 'qXL'], ['xr', 'qXR'], ['tail', 'qTail'], ['calm', 'qCalm']]
+    .map(([k, l]) => `<button class="sec" data-q="${k}">${T(l)}</button>`).join('');
+  $('cu_del').title = lang === 'es' ? 'Borrar el tiempo guardado elegido' : 'Delete the selected saved weather';
+  cuRender();
+}
+
+function dialSvg() {
+  const w = cu.wind, hdg = lastPos ? lastPos.hdg : null;
+  let g = '<circle cx="100" cy="100" r="86" fill="#f6f7f9" stroke="#b9c0ca" stroke-width="2"/>';
+  for (let a = 0; a < 360; a += 10) {
+    const big = a % 30 === 0, r1 = big ? 74 : 79, s = Math.sin(a * Math.PI / 180), c = Math.cos(a * Math.PI / 180);
+    g += `<line x1="${100 + 86 * s}" y1="${100 - 86 * c}" x2="${100 + r1 * s}" y2="${100 - r1 * c}" stroke="#98a2b3" stroke-width="${big ? 2 : 1}"/>`;
+  }
+  [['N', 0], ['E', 90], ['S', 180], ['W', 270]].forEach(([t, a]) => {
+    const s = Math.sin(a * Math.PI / 180), c = Math.cos(a * Math.PI / 180);
+    g += `<text x="${100 + 63 * s}" y="${100 - 63 * c + 5}" text-anchor="middle" font-size="14" font-weight="700" fill="#475467">${t}</text>`;
+  });
+  if (hdg != null) {  // the aircraft, rotated to its heading
+    g += `<g transform="rotate(${hdg} 100 100)"><path d="M100 84 L103 96 L116 103 L116 106 L103 103 L102.5 112 L107 115 L107 117 L100 115.5 L93 117 L93 115 L97.5 112 L97 103 L84 106 L84 103 L97 96 Z" fill="#b3261e"/></g>`;
+  }
+  if (w.dir == null) {
+    g += `<circle cx="100" cy="100" r="40" fill="none" stroke="#3b6fd4" stroke-width="4" stroke-dasharray="8 6"/>`;
+  } else if (w.kt > 0) {
+    // Arrow from the edge the wind comes FROM towards the centre.
+    g += `<g transform="rotate(${w.dir} 100 100)"><line x1="100" y1="16" x2="100" y2="70" stroke="${windColor(w)}" stroke-width="7" stroke-linecap="round"/>` +
+         `<path d="M100 80 L89 64 L111 64 Z" fill="${windColor(w)}"/><circle cx="100" cy="14" r="9" fill="#fff" stroke="${windColor(w)}" stroke-width="3"/></g>`;
+  }
+  return g;
+}
+
+function cuRender() {
+  const w = cu.wind;
+  $('cu_dial').innerHTML = dialSvg();
+  $('cu_vrb').checked = w.dir == null;
+  $('cu_windtxt').textContent = w.kt ? (w.dir == null ? 'VRB' : String(w.dir || 360).padStart(3, '0') + '°') + ' / ' + w.kt + (w.gust_kt > w.kt ? 'G' + w.gust_kt : '') + ' kt' : T('calm');
+  $('cu_kt').value = w.kt; $('cu_kt_v').textContent = w.kt + ' kt';
+  $('cu_gust').value = w.gust_kt || 0; $('cu_gust_v').textContent = w.gust_kt > w.kt ? w.gust_kt + ' kt' : '–';
+  $('cu_var').value = w.var || 0; $('cu_var_v').textContent = w.var ? '±' + w.var + '°' : '–';
+  // Components relative to the aircraft heading.
+  if (!lastPos) $('cu_rel').innerHTML = `<span class="muted">${T('cuNoHdg')}</span>`;
+  else if (w.dir == null || !w.kt) $('cu_rel').innerHTML = '';
+  else {
+    const r = (w.dir - lastPos.hdg) * Math.PI / 180, h = Math.round(w.kt * Math.cos(r)), x = Math.round(w.kt * Math.sin(r));
+    $('cu_rel').innerHTML = T('cuRel')(h >= 0 ? T('cuHead')(h) : T('cuTail')(-h), T('cuCross')(Math.abs(x), x >= 0 ? T('cuR') : T('cuL')), 0, norm(lastPos.hdg));
+  }
+  const vis = VIS.reduce((b, v) => Math.abs(v - Math.min(cu.vis_m, 100000)) < Math.abs(b - Math.min(cu.vis_m, 100000)) ? v : b, VIS[0]);
+  $('cu_vis').value = vis;
+  $('cu_wx').value = cu.wx.type;
+  $('cu_int').querySelectorAll('button').forEach(b => { b.className = b.dataset.v === (cu.wx.intensity || '') ? 'on' : ''; b.disabled = WX_NO_INT.has(cu.wx.type); });
+  $('cu_temp').value = cu.temp; $('cu_temp_v').textContent = cu.temp + '°C';
+  $('cu_dew').value = cu.dew; $('cu_dew_v').textContent = cu.dew + '°C';
+  $('cu_qnh').value = cu.qnh; $('cu_qnh_v').textContent = cu.qnh;
+  $('cu_qnh_in').textContent = 'QNH ' + cu.qnh + ' hPa = ' + (cu.qnh / 33.8639).toFixed(2) + ' inHg';
+  cuLayers();
+}
+
+function cuLayers() {
+  const box = $('cu_layers'), focus = document.activeElement && box.contains(document.activeElement);
+  if (focus) return;  // do not rebuild while typing a base
+  box.replaceChildren();
+  for (let i = 0; i < 3; i++) {
+    const c = cu.clouds[i] || {cover: '', base_ft: 1000 * (i + 1) * 2, cb: false};
+    const row = document.createElement('div'); row.className = 'layer';
+    row.innerHTML = `<select data-i="${i}" data-k="cover"><option value="">${T('noCloud')}</option>` +
+      ['FEW', 'SCT', 'BKN', 'OVC'].map(k => `<option value="${k}"${c.cover === k ? ' selected' : ''}>${T('covers')[k]}</option>`).join('') + '</select>' +
+      `<input type="number" data-i="${i}" data-k="base_ft" min="0" max="40000" step="100" value="${c.base_ft}" ${c.cover ? '' : 'disabled'}> ft` +
+      `<label class="row muted"><input type="checkbox" data-i="${i}" data-k="cb" ${c.cb ? 'checked' : ''} ${c.cover ? '' : 'disabled'}>${T('cb')}</label>`;
+    box.append(row);
+    if (!cu.clouds[i]) break;  // one empty row at a time
+  }
+}
+$('cu_layers').addEventListener('change', e => {
+  const i = +e.target.dataset.i, k = e.target.dataset.k;
+  if (!k) return;
+  const c = cu.clouds[i] || {cover: '', base_ft: 1000 * (i + 1) * 2, cb: false};
+  c[k] = k === 'cb' ? e.target.checked : k === 'base_ft' ? Math.max(0, Math.min(40000, Math.round((+e.target.value || 0) / 100) * 100)) : e.target.value;
+  if (k === 'cover' && !c.cover) cu.clouds.splice(i); else cu.clouds[i] = c;
+  e.target.blur(); cuChanged();
+});
+
+function cuChanged() {
+  if (cu.dew > cu.temp) cu.dew = cu.temp;
+  cuRender();
+  try { localStorage.setItem('cuForm', JSON.stringify(cu)); } catch (e) {}
+  clearTimeout(cuPrevTimer);
+  cuPrevTimer = setTimeout(async () => {
+    try { $('cu_metar').textContent = (await (await POST('/api/custom/preview', cuPayload())).json()).metar; } catch (e) {}
+  }, 150);
+}
+function cuPayload() {
+  return Object.assign({}, cu, {scope: document.querySelector('input[name=cu_scope]:checked').value,
+                               icao: $('cu_icao').value.trim().toUpperCase(), seconds: +$('cu_secs').value});
+}
+
+// Dragging on the dial sets where the wind comes from (10° steps, 1° with Shift).
+function dialAngle(e) {
+  const r = $('cu_dial').getBoundingClientRect();
+  const a = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
+  const step = e.shiftKey ? 1 : 10;
+  return norm(Math.round(a / step) * step) || 360;
+}
+let dialDrag = false;
+$('cu_dial').addEventListener('pointerdown', e => { dialDrag = true; $('cu_dial').setPointerCapture(e.pointerId); cuSetDir(dialAngle(e)); });
+$('cu_dial').addEventListener('pointermove', e => { if (dialDrag) cuSetDir(dialAngle(e)); });
+$('cu_dial').addEventListener('pointerup', () => { dialDrag = false; });
+$('cu_dial').addEventListener('wheel', e => { e.preventDefault(); if (cu.wind.dir != null) cuSetDir(norm(cu.wind.dir + (e.deltaY > 0 ? 10 : -10)) || 360); }, {passive: false});
+function cuSetDir(d) { cu.wind.dir = d; if (!cu.wind.kt) cu.wind.kt = 10; cuChanged(); }
+
+$('cu_vrb').onchange = () => { cu.wind.dir = $('cu_vrb').checked ? null : (lastPos ? norm(Math.round(lastPos.hdg / 10) * 10) || 360 : 270); cuChanged(); };
+$('cu_kt').oninput = () => { cu.wind.kt = +$('cu_kt').value; if (cu.wind.kt && cu.wind.dir === 0) cu.wind.dir = 360; cuChanged(); };
+$('cu_gust').oninput = () => { cu.wind.gust_kt = +$('cu_gust').value; cuChanged(); };
+$('cu_var').oninput = () => { cu.wind.var = +$('cu_var').value; cuChanged(); };
+$('cu_vis').onchange = () => { cu.vis_m = +$('cu_vis').value; cuChanged(); };
+$('cu_wx').onchange = () => { cu.wx.type = $('cu_wx').value; if (WX_NO_INT.has(cu.wx.type)) cu.wx.intensity = ''; cuChanged(); };
+$('cu_int').onclick = e => { if (e.target.dataset.v != null && !e.target.disabled) { cu.wx.intensity = e.target.dataset.v; cuChanged(); } };
+$('cu_temp').oninput = () => { cu.temp = +$('cu_temp').value; cuChanged(); };
+$('cu_dew').oninput = () => { cu.dew = Math.min(+$('cu_dew').value, cu.temp); cuChanged(); };
+$('cu_qnh').oninput = () => { cu.qnh = +$('cu_qnh').value; cuChanged(); };
+['cu_icao', 'cu_secs'].forEach(id => $(id).addEventListener('input', cuChanged));
+document.querySelectorAll('input[name=cu_scope]').forEach(r => r.onchange = cuChanged);
+$('cu_quick').onclick = e => {
+  const q = e.target.dataset.q; if (!q) return;
+  if (q === 'calm') { cu.wind = {dir: 360, kt: 0, gust_kt: 0, var: 0}; return cuChanged(); }
+  const hdg = lastPos ? lastPos.hdg : 0, off = {head: 0, xr: 90, tail: 180, xl: 270}[q];
+  cu.wind.dir = norm(Math.round((hdg + off) / 10) * 10) || 360;
+  if (!cu.wind.kt) cu.wind.kt = 15;
+  cuChanged();
+};
+$('cu_preset').onchange = () => {
+  const v = $('cu_preset').value; if (!v) return;
+  const src = v.startsWith('p:') ? PRESETS[v.slice(2)] : cuMine()[v.slice(2)];
+  if (!src) return;
+  const f = JSON.parse(JSON.stringify(src));
+  if (f.rel != null) { f.wind.dir = norm(Math.round(((lastPos ? lastPos.hdg : 0) + f.rel) / 10) * 10) || 360; delete f.rel; }
+  cu = f; cuChanged();
+};
+$('cu_save').onclick = () => {
+  const name = (prompt(T('cuSaveAsk')) || '').trim().slice(0, 40); if (!name) return;
+  const mine = cuMine(); mine[name] = JSON.parse(JSON.stringify(cu));
+  try { localStorage.setItem('cuPresets', JSON.stringify(mine)); } catch (e) {}
+  cuLang(); $('cu_preset').value = 'm:' + name;
+};
+$('cu_del').onclick = () => {
+  const v = $('cu_preset').value; if (!v.startsWith('m:')) return;
+  const mine = cuMine(); delete mine[v.slice(2)];
+  try { localStorage.setItem('cuPresets', JSON.stringify(mine)); } catch (e) {}
+  cuLang();
+};
+$('cu_load').onclick = async () => {
+  $('cu_srcmsg').textContent = '';
+  const r = await (await fetch('/api/custom/from?icao=' + encodeURIComponent($('cu_src').value))).json();
+  if (r.error) { $('cu_srcmsg').textContent = r.error; return; }
+  cu = r.form; if (cu.wind.dir === 0 && cu.wind.kt) cu.wind.dir = 360;
+  $('cu_srcmsg').innerHTML = `<span class="raw">${esc(r.raw)}</span>`;
+  cuChanged();
+};
+$('cu_apply').onclick = async () => {
+  $('cu_msg').textContent = '…';
+  let r; try { r = await (await POST('/api/custom/apply', cuPayload())).json(); } catch (e) { r = {error: String(e)}; }
+  $('cu_msg').textContent = r.error || r.note || '';
+  $('cu_msg').className = 'muted' + (r.error ? ' warn' : '');
+  tick();
+};
+$('cu_clear').onclick = async () => {
+  if (!confirm(T('cuConfirmClear'))) return;
+  await POST('/api/custom/clear'); $('cu_msg').textContent = ''; tick();
+};
+let cuLastHdg = null;
+function cuState(c) {
+  $('cu_active').style.display = c.active ? '' : 'none';
+  $('cu_clear').disabled = !c.active;
+  $('cu_badge').textContent = c.active ? '● ' + (lang === 'es' ? 'activo' : 'active') : '';
+  $('cu_badge').style.color = c.active ? '#c2410c' : '';
+  if (c.active) {
+    $('cu_active').innerHTML = `<b>${T('cuActive')}</b>${c.scope === 'station' ? ' · ' + esc(c.icao) : ''}<br><span class="raw">${esc(c.metar)}</span>` +
+      (c.note ? `<br>${esc(c.note)}` : '');
+    if (!cuLoadedFromServer && c.form && c.form.wind) {  // page reloaded while custom weather is on: show it
+      cuLoadedFromServer = true; cu = c.form;
+      document.querySelector(`input[name=cu_scope][value=${c.scope === 'station' ? 'station' : 'area'}]`).checked = true;
+      $('cu_icao').value = c.icao || ''; cuChanged();
+    }
+  }
+  cuLoadedFromServer = true;
+  const h = lastPos ? Math.round(lastPos.hdg) : null;
+  if (h !== cuLastHdg && $('cu').open) { cuLastHdg = h; cuRender(); }
+}
+try { $('cu').open = location.hash === '#custom' || localStorage.getItem('cuOpen') === '1'; } catch (e) {}
+$('cu').addEventListener('toggle', () => { try { localStorage.setItem('cuOpen', $('cu').open ? '1' : '0'); } catch (e) {} if ($('cu').open) cuRender(); });
+cuLang(); cuChanged();
 
 tick(); setInterval(tick, 3000);
 </script>

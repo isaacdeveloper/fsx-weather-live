@@ -57,6 +57,7 @@ class Sim:
         self._created = set()
         self._create_pkts = {}     # SimConnect packet id -> icao of a WeatherCreateStation call
         self._custom_on = False
+        self._glob_orig = None     # FSX's GLOB observation before custom weather overwrote it
         self._checks = {}          # request id -> label of a post-injection readback check
         self._diag_running = False
         self._exc = []             # exceptions received (for the diagnostic)
@@ -216,7 +217,8 @@ class Sim:
 
     # ---------- weather commands (run on the worker thread) ----------
     def _next_req(self):
-        self._req += 1
+        # Stay below 5000: the diagnostic uses fixed ids from 5001.
+        self._req = self._req + 1 if self._req < 4900 else REQ_WX_BASE + 1
         return self._req
 
     def _last_packet(self):
@@ -233,7 +235,7 @@ class Sim:
             self.log("WeatherSetDynamicUpdateRate(0) hr=0x%08X" % (hr & 0xFFFFFFFF))
 
     def cmd_restore_global(self, rate=None):
-        if not self._custom_on and not self._created:
+        if not self._custom_on and not self._created and self._glob_orig is None:
             return  # FSX weather was never touched on this connection: nothing to restore
         for icao in list(self._created):
             self._Remove(self._h, self._next_req(), icao.encode("ascii"))
@@ -241,12 +243,35 @@ class Sim:
         self._create_pkts.clear()
         self._custom_on = False
         hr = self._SetGlobal(self._h)
+        self._restore_glob()
         self.log(t("sim_restore", hr=hr & 0xFFFFFFFF))
         if rate is not None:
             self._SetRate(self._h, int(rate))
 
-    def cmd_apply(self, stations, seconds, freeze=True):
-        """stations: list of dicts with icao, name, lat, lon, elev_m, sim_metar."""
+    def _restore_glob(self):
+        """Puts back FSX's own GLOB observation if custom weather replaced it."""
+        if self._glob_orig:
+            self._SetObs(self._h, 0, self._glob_orig.encode("ascii", "ignore"))
+            self.log(t("sim_glob_restored"))
+        self._glob_orig = None
+
+    def _set_glob(self, metar, seconds):
+        if self._glob_orig is None:
+            req = self._next_req()
+            self._ReqStation(self._h, req, b"GLOB")
+            end = time.time() + 1.5
+            while req not in self.readback and time.time() < end:
+                self._dispatch()
+                time.sleep(0.05)
+            self._glob_orig = self.readback.pop(req, "")
+        return self._SetObs(self._h, int(seconds), metar.encode("ascii", "ignore"))
+
+    def cmd_apply(self, stations, seconds, freeze=True, glob_metar=None):
+        """stations: list of dicts with icao, name, lat, lon, elev_m, sim_metar.
+
+        glob_metar: also set FSX's global station (GLOB) so the weather covers places
+        between and beyond the stations (custom weather). Without it, a GLOB set earlier
+        is given back to FSX."""
         from collections import Counter
         if not self._custom_on:
             self.cmd_enable_custom(freeze)
@@ -254,6 +279,12 @@ class Sim:
         self._diag_running = True      # silences per-exception logging
         ok = 0
         try:
+            if glob_metar:
+                hr = self._set_glob(glob_metar, seconds)
+                if hr != 0:
+                    self.log("SetObservation GLOB hr=0x%08X" % (hr & 0xFFFFFFFF))
+            else:
+                self._restore_glob()
             for s in stations:
                 icao = s["icao"].encode("ascii", "ignore")
                 if s["icao"] not in self._created:

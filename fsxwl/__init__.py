@@ -1,2 +1,2 @@
 """FSX Weather Live: real-world weather for FSX from public NOAA METAR reports."""
-__version__ = "0.4.0"
+__version__ = "0.5.0"

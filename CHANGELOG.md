@@ -5,6 +5,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-25
+
+### Added
+- "Create my weather" editor in the web UI: a draggable compass sets the wind direction (showing the aircraft and the resulting headwind/tailwind and crosswind), with quick buttons for head/cross/tail wind relative to the aircraft, plus speed, gusts, variation, visibility, weather phenomenon and intensity, up to 3 cloud layers with CB, temperature, dew point, QNH (with inHg) and a phase-in time. A live preview shows the exact METAR sent to FSX.
+- Custom weather goes to every nearby station plus FSX's global station (GLOB), or to a single airport. In area mode, new stations around the aircraft get it too as you fly. FSX's original GLOB weather is saved and put back when custom weather is removed or real weather is enabled.
+- Built-in presets (CAVOK, pleasant VFR, crosswind practice at 90° to the aircraft, strong gusty wind, low IFR, thick fog, thunderstorm, snowstorm, freezing rain), "start from the real weather at" an airport, and user presets saved in the browser.
+- Endpoints `POST /api/custom/preview`, `/api/custom/apply`, `/api/custom/clear` and `GET /api/custom/from?icao=`.
+
+### Fixed
+- North wind is now sent as `360` instead of `000` (which means calm in a METAR).
+- SimConnect request ids no longer run into the diagnostic's fixed ids after many updates.
+
 ## [0.4.0] - 2026-11-25
 
 ### Added

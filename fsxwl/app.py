@@ -9,7 +9,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-from . import net
+from . import custom, net
 from .i18n import SUPPORTED, get_lang, set_lang, t
 from .metar import parse_metar, to_simconnect, summary, weather_info
 from .overlay import Overlay
@@ -50,6 +50,13 @@ def load_config(base_dir):
     return cfg
 
 
+def _clamp(v, lo, hi, default):
+    try:
+        return max(lo, min(hi, float(v)))
+    except (TypeError, ValueError):
+        return default
+
+
 class App:
     def __init__(self, base_dir, cfg):
         self.base_dir = base_dir
@@ -65,6 +72,7 @@ class App:
         self.fetch_error = None   # (key, kwargs), rendered per language
         self.inject = False
         self.inject_note = None
+        self.custom = None        # active custom weather (see apply_custom)
         self.sim = Sim(cfg["simconnect_dll"], self.log)
         self.overlay = Overlay(self)
         self.area_cache = {}      # rounded bbox -> (time, built stations)
@@ -131,6 +139,8 @@ class App:
         self.log(t("fetched", n=len(stations), lat=lat, lon=lon))
         if inject:
             self._push()
+        elif self.custom and self.custom["scope"] == "area":
+            self._push_custom()   # new stations around the aircraft get the same custom weather
 
     def _push(self):
         with self.lock:
@@ -149,7 +159,7 @@ class App:
     def _check(self, label):
         """Logs what FSX really has near the aircraft, to spot the sim overriding the injection."""
         p = self.sim.pos
-        if self.inject and self.sim.connected and p:
+        if (self.inject or self.custom) and self.sim.connected and p:
             self.sim.post(Sim.cmd_check, p["lat"], p["lon"], label)
 
     def set_inject(self, enabled):
@@ -157,6 +167,8 @@ class App:
             if enabled == self.inject:
                 return
             self.inject = enabled
+            if enabled:
+                self.custom = None   # real weather replaces custom weather
         if enabled:
             if not self.sim.connected:
                 self.inject_note = ("note_wait", {})
@@ -167,6 +179,101 @@ class App:
             self.sim.post(Sim.cmd_restore_global, self._restore_rate())
             self.inject_note = ("note_off", {})
             self.log(t("log_inj_off"))
+
+    # ---------- custom weather ----------
+    def _find_station(self, icao):
+        with self.lock:
+            pools = [self.stations] + [v[1] for v in self.area_cache.values()]
+        for pool in pools:
+            for s in pool:
+                if s["icao"] == icao:
+                    return s
+        found = net.metars_by_ids([icao])
+        return self._build(found)[0] if found else None
+
+    def custom_preview(self, form):
+        form = form or {}
+        d = custom.form_to_dict(form)
+        icao = str(form.get("icao") or "").strip().upper()
+        return to_simconnect(icao if form.get("scope") == "station" and icao else "GLOB", d,
+                             include_type=self.cfg["metar_type_keyword"], max_cloud_layers=custom.MAX_LAYERS)
+
+    def custom_from_station(self, icao):
+        icao = (icao or "").strip().upper()
+        if not icao:
+            return {"error": t("cu_noicao")}
+        try:
+            s = self._find_station(icao)
+        except Exception as e:
+            return {"error": t("fetch_fail", err=e)}
+        if not s:
+            return {"error": t("cu_nostation", icao=icao)}
+        return {"icao": s["icao"], "raw": s["raw"], "form": custom.dict_to_form(s["_d"])}
+
+    def apply_custom(self, form):
+        """Sends the user's weather to FSX: every nearby station plus GLOB ("area"), or one station."""
+        form = form or {}
+        scope = "station" if form.get("scope") == "station" else "area"
+        icao = str(form.get("icao") or "").strip().upper()
+        if not self.sim.connected:
+            return {"error": t("cu_nosim")}
+        st = None
+        if scope == "station":
+            if not icao:
+                return {"error": t("cu_noicao")}
+            try:
+                st = self._find_station(icao)
+            except Exception as e:
+                return {"error": t("fetch_fail", err=e)}
+            if not st:
+                return {"error": t("cu_nostation", icao=icao)}
+        secs = int(_clamp(form.get("seconds"), 0, 3600, self.cfg["transition_seconds"]))
+        with self.lock:
+            self.inject = False      # custom weather replaces real-weather injection
+            self.custom = {"form": form, "d": custom.form_to_dict(form), "scope": scope,
+                           "icao": icao if st else "", "station": st, "seconds": secs,
+                           "metar": "", "note": None}
+        self._push_custom()
+        c = self.custom
+        self.log(t("cu_log", metar=c["metar"]))
+        return {"ok": True, "metar": c["metar"], "note": self._render(c["note"])}
+
+    def _push_custom(self):
+        c = self.custom
+        if not c:
+            return
+        d = c["d"]
+
+        def mk(icao):
+            return to_simconnect(icao, d, include_type=self.cfg["metar_type_keyword"],
+                                 max_cloud_layers=custom.MAX_LAYERS)
+
+        now = datetime.now().strftime("%H:%M:%S")
+        if c["scope"] == "station":
+            targets = [dict(c["station"], sim_metar=mk(c["icao"]))]
+            glob = None
+            c["metar"] = targets[0]["sim_metar"]
+            c["note"] = ("cu_applied_st", {"icao": c["icao"], "time": now})
+        else:
+            with self.lock:
+                targets = [dict(s, sim_metar=mk(s["icao"])) for s in self.stations]
+            glob = mk("GLOB")
+            c["metar"] = glob
+            c["note"] = ("cu_applied_area", {"n": len(targets), "time": now})
+        self.sim.post(Sim.cmd_apply, targets, c["seconds"], bool(self.cfg["freeze_dynamics"]), glob)
+        for delay in (10, 90):
+            tm = threading.Timer(delay, self._check, args=("+%ds" % delay,))
+            tm.daemon = True
+            tm.start()
+
+    def clear_custom(self):
+        with self.lock:
+            if not self.custom:
+                return
+            self.custom = None
+        self.sim.post(Sim.cmd_restore_global, self._restore_rate())
+        self.inject_note = ("cu_off", {})
+        self.log(t("cu_off"))
 
     def _restore_rate(self):
         return self.cfg["restore_dynamic_rate"] if self.cfg["freeze_dynamics"] else None
@@ -216,6 +323,10 @@ class App:
                 "inject": {"enabled": self.inject, "note": self._render(self.inject_note)},
                 "update_minutes": self.cfg["update_minutes"],
                 "overlay": self.overlay.visible,
+                "custom": ({"active": True, "scope": self.custom["scope"], "icao": self.custom["icao"],
+                            "metar": self.custom["metar"], "form": self.custom["form"],
+                            "note": self._render(self.custom["note"])}
+                           if self.custom else {"active": False}),
                 "log": list(self.logbuf)[-40:],
             }
 
@@ -289,7 +400,7 @@ class App:
         except KeyboardInterrupt:
             pass
         finally:
-            if self.inject and self.sim.connected:
+            if (self.inject or self.custom) and self.sim.connected:
                 self.sim.post(Sim.cmd_restore_global, self._restore_rate())
                 time.sleep(1.0)
             self._stop.set()
@@ -328,6 +439,8 @@ def make_handler(app):
                 if not all(map(math.isfinite, box)):
                     return self._json({"error": "bbox"}, 400)
                 return self._json(app.area(*box, *grid))
+            if u.path == "/api/custom/from":
+                return self._json(app.custom_from_station(parse_qs(u.query).get("icao", [""])[0]))
             if u.path == "/api/search":
                 q = parse_qs(u.query).get("q", [""])[0]
                 return self._json(app.search(q))
@@ -354,6 +467,13 @@ def make_handler(app):
                 return self._json({"error": "json"}, 400)
             if self.path == "/api/inject":
                 app.set_inject(bool(data.get("enabled")))
+                return self._json({"ok": True})
+            if self.path == "/api/custom/preview":
+                return self._json({"metar": app.custom_preview(data)})
+            if self.path == "/api/custom/apply":
+                return self._json(app.apply_custom(data))
+            if self.path == "/api/custom/clear":
+                app.clear_custom()
                 return self._json({"ok": True})
             if self.path == "/api/overlay":
                 app.overlay.set_visible(bool(data.get("enabled")))

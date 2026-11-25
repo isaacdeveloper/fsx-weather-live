@@ -163,7 +163,8 @@ def to_simconnect(icao, d, now=None, include_type=True, max_cloud_layers=3):
 
     w = d.get("wind")
     if w:
-        dd = "VRB" if w["dir"] is None else "%03d" % (w["dir"] % 360)
+        # North is 360 in a METAR; 000 only goes with a calm (00000KT).
+        dd = "VRB" if w["dir"] is None else "%03d" % ((w["dir"] % 360) or (360 if w["kt"] else 0))
         s = "%s%02d" % (dd, min(w["kt"], 400))
         if w.get("gust_kt"):
             s += "G%02d" % min(w["gust_kt"], 400)
