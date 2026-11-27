@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-27
+
+### Changed
+- The language chosen in the web UI is saved to `config.json`, so the next session starts in that language. Other settings in the file are kept as they are.
+
 ## [0.5.0] - 2026-11-25
 
 ### Added

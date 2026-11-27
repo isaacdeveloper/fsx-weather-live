@@ -57,7 +57,31 @@ def _clamp(v, lo, hi, default):
         return default
 
 
+def save_config_value(base_dir, key, value):
+    """Persist a single key in config.json, keeping the user's other settings untouched."""
+    path = os.path.join(base_dir, "config.json")
+    data = {}
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    if data.get(key) == value:
+        return
+    data[key] = value
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
 class App:
+    def save_language(self, lang):
+        self.cfg["language"] = lang
+        try:
+            save_config_value(self.base_dir, "language", lang)
+        except (OSError, ValueError) as e:
+            self.log(f"config.json: {e}")
+
     def __init__(self, base_dir, cfg):
         self.base_dir = base_dir
         self.cfg = cfg
@@ -488,6 +512,7 @@ def make_handler(app):
                 if lang not in SUPPORTED:
                     return self._json({"error": "lang"}, 400)
                 set_lang(lang)
+                app.save_language(lang)
                 return self._json({"ok": True, "lang": lang})
             self.send_error(404)
 

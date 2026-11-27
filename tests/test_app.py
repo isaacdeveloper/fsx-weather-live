@@ -11,7 +11,7 @@ from http.server import ThreadingHTTPServer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from fsxwl import net  # noqa: E402
-from fsxwl.app import App, DEFAULTS, make_handler  # noqa: E402
+from fsxwl.app import App, DEFAULTS, load_config, make_handler  # noqa: E402
 from fsxwl.i18n import STR, get_lang, set_lang  # noqa: E402
 
 FAKE = [
@@ -237,6 +237,16 @@ class TestApp(unittest.TestCase):
         r = json.loads(self.post("/api/diag", {}, H).read())
         self.assertIn("not connected", r["msg"])
         self.assertIn("Enter an address", json.loads(self.get("/api/search?q="))["error"])
+
+    def test_lang_choice_is_saved_to_config(self):
+        path = os.path.join(self.tmp, "config.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"language": "es", "port": 9999}, f)
+        self.post("/api/lang", {"lang": "en"}, {"X-FSXWL": "1"})
+        with open(path, encoding="utf-8") as f:
+            saved = json.load(f)
+        self.assertEqual(saved, {"language": "en", "port": 9999})
+        self.assertEqual(load_config(self.tmp)["language"], "en")
 
     def test_lang_endpoint_rejects_unknown_and_foreign(self):
         with self.assertRaises(urllib.error.HTTPError) as c:
